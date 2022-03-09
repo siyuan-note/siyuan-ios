@@ -58,7 +58,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         // 息屏/应用切换
         NotificationCenter.default.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
-        
+        waitFotKernelHttpServing()
         syWebView.load(URLRequest(url: url))
         
         view.addSubview(syWebView)
@@ -134,6 +134,15 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         let documentsDirectory = urls[0]
         Iosk.MobileStartKernel("ios", Bundle.main.resourcePath, documentsDirectory.path, "", "", "", TimeZone.current.identifier);
     }
+    
+    func waitFotKernelHttpServing() {
+        for _index in 1...500 {
+            usleep(10000);
+            if (Iosk.MobileIsHttpServing()) {
+                break;
+            }
+        }
+     }
     
     @objc func keyboardDidHide(notification: NSNotification) {
         keyboardShowed = true
