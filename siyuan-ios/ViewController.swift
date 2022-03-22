@@ -45,6 +45,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         syWebView.configuration.preferences.javaScriptEnabled = true
         syWebView.configuration.userContentController.add(self, name: "startKernelFast")
         syWebView.configuration.userContentController.add(self, name: "changeStatusBar")
+        syWebView.configuration.userContentController.add(self, name: "setClipboard")
         
         // open url
         syWebView.navigationDelegate = self
@@ -96,6 +97,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             }
             self.view.backgroundColor = UIColor.init(hexString: String(argument[0]))
             setNeedsStatusBarAppearanceUpdate()
+        } else if message.name == "setClipboard" {
+            UIPasteboard.general.string = (message.body as! String)
         }
     }
     
