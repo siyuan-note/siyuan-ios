@@ -135,7 +135,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         Iosk.MobileSetDefaultLang("zh_CN")
         let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         let documentsDirectory = urls[0]
-        Iosk.MobileStartKernel("ios", Bundle.main.resourcePath, documentsDirectory.path, "", "", "", TimeZone.current.identifier);
+        Iosk.MobileStartKernel("ios", Bundle.main.resourcePath, documentsDirectory.path, "", "", TimeZone.current.identifier, "");
     }
     
     func waitFotKernelHttpServing() {
