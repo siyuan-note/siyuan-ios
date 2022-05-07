@@ -311,8 +311,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "siyuan-ios/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = SiYuan;
-				INFOPLIST_KEY_NSCameraUsageDescription = "使用照相机功能";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "使用录音功能";
+				INFOPLIST_KEY_NSCameraUsageDescription = "将图片插入笔记中 Insert pictures into notes";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "将录音插入笔记中 Insert a recording into a note";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -327,7 +327,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.0;
+				MARKETING_VERSION = 2.0.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -350,8 +350,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "siyuan-ios/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = SiYuan;
-				INFOPLIST_KEY_NSCameraUsageDescription = "使用照相机功能";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "使用录音功能";
+				INFOPLIST_KEY_NSCameraUsageDescription = "将图片插入笔记中 Insert pictures into notes";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "将录音插入笔记中 Insert a recording into a note";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -366,7 +366,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.0;
+				MARKETING_VERSION = 2.0.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
