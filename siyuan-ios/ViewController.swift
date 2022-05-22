@@ -133,7 +133,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
     
     func initKernel () {
-        Iosk.MobileSetDefaultLang("zh_CN")
+        Iosk.MobileSetDefaultLang(Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh_CN" : "en_US")
         let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         let documentsDirectory = urls[0]
         Iosk.MobileStartKernel("ios", Bundle.main.resourcePath, documentsDirectory.path, "", "", TimeZone.current.identifier, getIP());
