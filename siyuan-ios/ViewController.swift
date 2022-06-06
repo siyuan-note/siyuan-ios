@@ -140,7 +140,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     
     func waitFotKernelHttpServing() {
         for _ in 1...500 {
-            usleep(10000);
+            usleep(100000); // 0.1s
             if (Iosk.MobileIsHttpServing()) {
                 break;
             }

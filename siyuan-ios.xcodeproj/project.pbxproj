@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2672160927B279A400FD0AB3 /* iosk.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 26610E17279FBF520057B392 /* iosk.xcframework */; };
 		268CE5A2275A68B400DFCFF8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268CE5A1275A68B400DFCFF8 /* AppDelegate.swift */; };
 		268CE5A4275A68B400DFCFF8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268CE5A3275A68B400DFCFF8 /* SceneDelegate.swift */; };
 		268CE5A6275A68B400DFCFF8 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268CE5A5275A68B400DFCFF8 /* ViewController.swift */; };
@@ -15,10 +14,10 @@
 		268CE5AB275A68B700DFCFF8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 268CE5AA275A68B700DFCFF8 /* Assets.xcassets */; };
 		268CE5AE275A68B700DFCFF8 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 268CE5AC275A68B700DFCFF8 /* LaunchScreen.storyboard */; };
 		268CE5B6275A68F300DFCFF8 /* app in Resources */ = {isa = PBXBuildFile; fileRef = 268CE5B5275A68F300DFCFF8 /* app */; };
+		26D64CCE28430F4000295E70 /* iosk.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 26D64CCD28430F4000295E70 /* iosk.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		26610E17279FBF520057B392 /* iosk.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = iosk.xcframework; path = "../siyuan-src/ios/iosk.xcframework"; sourceTree = "<group>"; };
 		268CE59E275A68B400DFCFF8 /* siyuan-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "siyuan-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		268CE5A1275A68B400DFCFF8 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		268CE5A3275A68B400DFCFF8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -28,6 +27,7 @@
 		268CE5AD275A68B700DFCFF8 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		268CE5AF275A68B700DFCFF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		268CE5B5275A68F300DFCFF8 /* app */ = {isa = PBXFileReference; lastKnownFileType = folder; path = app; sourceTree = "<group>"; };
+		26D64CCD28430F4000295E70 /* iosk.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = iosk.xcframework; path = ../siyuan/kernel/ios/iosk.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -35,7 +35,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2672160927B279A400FD0AB3 /* iosk.xcframework in Frameworks */,
+				26D64CCE28430F4000295E70 /* iosk.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,7 +77,7 @@
 		268CE5B7275A69E800DFCFF8 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				26610E17279FBF520057B392 /* iosk.xcframework */,
+				26D64CCD28430F4000295E70 /* iosk.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -328,7 +328,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.11;
+				MARKETING_VERSION = 2.0.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -368,7 +368,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.11;
+				MARKETING_VERSION = 2.0.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
