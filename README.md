@@ -5,8 +5,8 @@
 
 ## 搭建步骤
 
-1. 到 https://github.com/siyuan-note/kernel-libs 上下载 ios/iosk.xcframework 并将其添加为 Frameworks，其中 Embed 选择 Do Not Embed
-2. 从桌面端安装路径 `resources` 拷贝以下资源文件到 app 目录中
+1. 参考[思源笔记开发指南](https://github.com/siyuan-note/siyuan/blob/master/DEV_zh_CN.md)编译内核
+2. 拷贝资源文件到 app 目录中
    * appearance
    * guide
    * stage
