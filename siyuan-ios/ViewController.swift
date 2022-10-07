@@ -181,6 +181,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         if syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
             syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
         }
+        syWebView.evaluateJavaScript("hideKeyboardToolbar()")
     }
     
     @objc func keyboardDidShow(notification: NSNotification) {
@@ -191,6 +192,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         if syWebView.frame.size.height != mainHeight {
             syWebView.frame.size.height = mainHeight
         }
+        syWebView.evaluateJavaScript("showKeyboardToolbar()")
     }
     
     @objc func willEnterForeground(_ notification: NSNotification!) {
