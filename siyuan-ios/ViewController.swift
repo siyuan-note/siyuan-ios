@@ -35,7 +35,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        guard let url = URL(string: "http://localhost:6806/appearance/boot/index.html?v=1") else {
+        guard let url = URL(string: "http://localhost:6806/appearance/boot/index.html") else {
             return
         }
         
@@ -109,8 +109,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             decisionHandler(.allow)
             return
         }
-        print(url!.description.lowercased())
-        
         if url!.description == "siyuan://api/system/exit" {
             decisionHandler(.cancel)
             UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
@@ -120,13 +118,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             url!.description.lowercased().starts(with: "http://127.0.0.1:6806/export") == true || // 导出 Data
             url!.description.lowercased().starts(with: "http://localhost:6806/export") == true ||
             (
-                (url!.description.lowercased().starts(with: "http://127.0.0.1:6806") == false ||
+                (url!.description.lowercased().starts(with: "http://127.0.0.1:6806") == false &&
                  url!.description.lowercased().starts(with: "http://localhost:6806") == false) &&
                 (navigationAction.targetFrame?.request) != nil && (navigationAction.targetFrame?.request.url?.description.lowercased().starts(with: "http://127.0.0.1:6806") == true ||
                     navigationAction.targetFrame?.request.url?.description.lowercased().starts(with: "http://localhost:6806") == true)
             )
-        ) &&
-        UIApplication.shared.canOpenURL(url!) {
+        ) && UIApplication.shared.canOpenURL(url!) {
             decisionHandler(.cancel)
             UIApplication.shared.open(url!, options: [:], completionHandler: nil)
         } else if navigationAction.navigationType == .linkActivated && UIApplication.shared.canOpenURL(url!) {
