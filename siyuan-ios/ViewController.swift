@@ -35,7 +35,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        guard let url = URL(string: "http://localhost:6806/appearance/boot/index.html") else {
+        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html") else {
             return
         }
         
@@ -114,14 +114,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
         } else if (
             url!.description.lowercased().starts(with: "http://127.0.0.1:6806/assets") == true ||
-            url!.description.lowercased().starts(with: "http://localhost:6806/assets") == true ||
             url!.description.lowercased().starts(with: "http://127.0.0.1:6806/export") == true || // 导出 Data
-            url!.description.lowercased().starts(with: "http://localhost:6806/export") == true ||
             (
-                (url!.description.lowercased().starts(with: "http://127.0.0.1:6806") == false &&
-                 url!.description.lowercased().starts(with: "http://localhost:6806") == false) &&
-                (navigationAction.targetFrame?.request) != nil && (navigationAction.targetFrame?.request.url?.description.lowercased().starts(with: "http://127.0.0.1:6806") == true ||
-                    navigationAction.targetFrame?.request.url?.description.lowercased().starts(with: "http://localhost:6806") == true)
+                url!.description.lowercased().starts(with: "http://127.0.0.1:6806") == false &&
+                navigationAction.targetFrame?.request) != nil && (navigationAction.targetFrame?.request.url?.description.lowercased().starts(with: "http://127.0.0.1:6806") == true
             )
         ) && UIApplication.shared.canOpenURL(url!) {
             decisionHandler(.cancel)
@@ -199,7 +195,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     
     @objc func willEnterForeground(_ notification: NSNotification!) {
         // iOS 端息屏后内核退出，再次进入时重新拉起内核
-        let url = URL(string: "http://localhost:6806/api/system/version")!
+        let url = URL(string: "http://127.0.0.1:6806/api/system/version")!
         let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
             guard let _ = data, error == nil else {
                 DispatchQueue.main.async {
