@@ -20,6 +20,7 @@ import UIKit
 import WebKit
 import Iosk
 import PDFKit
+import GameController
 
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate, WKScriptMessageHandler {
 
@@ -42,7 +43,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         initKernel()
         
         // js 中调用 swift
-        syWebView.configuration.preferences.javaScriptEnabled = true
+        syWebView.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         syWebView.configuration.userContentController.add(self, name: "startKernelFast")
         syWebView.configuration.userContentController.add(self, name: "changeStatusBar")
         syWebView.configuration.userContentController.add(self, name: "setClipboard")
@@ -53,8 +54,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         // show keyboard
         syWebView.scrollView.isScrollEnabled = false
         syWebView.scrollView.delegate = self
-        NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidShow), name: UIResponder.keyboardDidShowNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidHide), name: UIResponder.keyboardDidHideNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChange), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         
         // 息屏/应用切换
         NotificationCenter.default.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -173,24 +173,29 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         }
         return address
     }
-
-    @objc func keyboardDidHide(notification: NSNotification) {
-        keyboardShowed = true
-        if syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
-            syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
-        }
-        syWebView.evaluateJavaScript("hideKeyboardToolbar()")
-    }
     
-    @objc func keyboardDidShow(notification: NSNotification) {
+    @objc func keyboardWillChange(notification: NSNotification) {
         keyboardShowed = true
-        let keyboardHeight = (notification.userInfo![UIResponder.keyboardFrameEndUserInfoKey] as! NSValue).cgRectValue.height
-        let mainHeight = view.safeAreaLayoutGuide.layoutFrame.height
-        - keyboardHeight + view.safeAreaInsets.bottom
-        if syWebView.frame.size.height != mainHeight {
-            syWebView.frame.size.height = mainHeight
+        if (GCKeyboard.coalesced != nil) {
+            if syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
+                syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
+            }
+        } else {
+            guard let userInfo = notification.userInfo else { return }
+            let endFrameRect = (userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
+            if (endFrameRect?.origin.y ?? 0) >= UIScreen.main.bounds.size.height {
+                if syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
+                    syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
+                }
+                syWebView.evaluateJavaScript("hideKeyboardToolbar()")
+            } else {
+                let mainHeight = view.safeAreaLayoutGuide.layoutFrame.height - (endFrameRect?.height ?? 0) + view.safeAreaInsets.bottom
+                if syWebView.frame.size.height != mainHeight {
+                    syWebView.frame.size.height = mainHeight
+                }
+                syWebView.evaluateJavaScript("showKeyboardToolbar()")
+            }
         }
-        syWebView.evaluateJavaScript("showKeyboardToolbar()")
     }
     
     @objc func willEnterForeground(_ notification: NSNotification!) {
