@@ -71,6 +71,14 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             syWebView.frame = view.safeAreaLayoutGuide.layoutFrame
         }
     }
+    
+    override var prefersHomeIndicatorAutoHidden: Bool {
+        return UIDevice.current.userInterfaceIdiom == .pad
+    }
+
+    override var prefersStatusBarHidden: Bool {
+        return UIDevice.current.userInterfaceIdiom == .pad
+    }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
         return isDarkStyle ? .lightContent : .darkContent
