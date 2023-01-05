@@ -95,7 +95,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "startKernelFast" {
             let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-            Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "", "", "")
+            Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
         } else if message.name == "changeStatusBar" {
             let argument = (message.body as! String).split(separator: " ");
             if (argument[1] == "0") {
@@ -140,8 +140,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     
     func initKernel () {
         let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        let documentsDirectory = urls[0]
-        Iosk.MobileStartKernel("ios", Bundle.main.resourcePath, documentsDirectory.path, "", "", TimeZone.current.identifier, getIP(), Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh_CN" : "en_US");
+        Iosk.MobileStartKernel("ios", Bundle.main.resourcePath, urls[0].path, TimeZone.current.identifier, getIP(), Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh_CN" : "en_US");
     }
     
     func waitFotKernelHttpServing() {
@@ -215,7 +214,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
                     self.syWebView.evaluateJavaScript("var logElement = document.getElementById('errorLog');if(logElement){logElement.remove();}", completionHandler: nil)
                 }
                 let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-                Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "", "", "")
+                Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
                 return
             }
         }
