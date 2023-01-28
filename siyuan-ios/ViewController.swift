@@ -24,7 +24,7 @@ import GameController
 
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate, WKScriptMessageHandler {
 
-    let syWebView = WKWebView()
+    static let syWebView = WKWebView()
     var keyboardShowed = false
     var isDarkStyle = false
     
@@ -43,32 +43,32 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         initKernel()
         
         // js 中调用 swift
-        syWebView.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-        syWebView.configuration.userContentController.add(self, name: "startKernelFast")
-        syWebView.configuration.userContentController.add(self, name: "changeStatusBar")
-        syWebView.configuration.userContentController.add(self, name: "setClipboard")
+        ViewController.syWebView.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        ViewController.syWebView.configuration.userContentController.add(self, name: "startKernelFast")
+        ViewController.syWebView.configuration.userContentController.add(self, name: "changeStatusBar")
+        ViewController.syWebView.configuration.userContentController.add(self, name: "setClipboard")
         
         // open url
-        syWebView.navigationDelegate = self
+        ViewController.syWebView.navigationDelegate = self
         
         // show keyboard
-        syWebView.scrollView.isScrollEnabled = false
-        syWebView.scrollView.delegate = self
+        ViewController.syWebView.scrollView.isScrollEnabled = false
+        ViewController.syWebView.scrollView.delegate = self
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChange), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         
         // 息屏/应用切换
         NotificationCenter.default.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
         waitFotKernelHttpServing()
-        syWebView.load(URLRequest(url: url))
+        ViewController.syWebView.load(URLRequest(url: url))
         
-        view.addSubview(syWebView)
+        view.addSubview(ViewController.syWebView)
     }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if syWebView.frame.width != view.safeAreaLayoutGuide.layoutFrame.width || !keyboardShowed {
-            syWebView.frame = view.safeAreaLayoutGuide.layoutFrame
+        if ViewController.syWebView.frame.width != view.safeAreaLayoutGuide.layoutFrame.width || !keyboardShowed {
+            ViewController.syWebView.frame = view.safeAreaLayoutGuide.layoutFrame
         }
     }
     
@@ -184,23 +184,23 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     @objc func keyboardWillChange(notification: NSNotification) {
         keyboardShowed = true
         if (GCKeyboard.coalesced != nil) {
-            if syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
-                syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
+            if ViewController.syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
+                ViewController.syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
             }
         } else {
             guard let userInfo = notification.userInfo else { return }
             let endFrameRect = (userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
             if (endFrameRect?.origin.y ?? 0) >= UIScreen.main.bounds.size.height {
-                if syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
-                    syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
+                if ViewController.syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
+                    ViewController.syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
                 }
-                syWebView.evaluateJavaScript("hideKeyboardToolbar()")
+                ViewController.syWebView.evaluateJavaScript("hideKeyboardToolbar()")
             } else {
                 let mainHeight = view.safeAreaLayoutGuide.layoutFrame.height - (endFrameRect?.height ?? 0) + view.safeAreaInsets.bottom
-                if syWebView.frame.size.height != mainHeight {
-                    syWebView.frame.size.height = mainHeight
+                if ViewController.syWebView.frame.size.height != mainHeight {
+                    ViewController.syWebView.frame.size.height = mainHeight
                 }
-                syWebView.evaluateJavaScript("showKeyboardToolbar()")
+                ViewController.syWebView.evaluateJavaScript("showKeyboardToolbar()")
             }
         }
     }
@@ -211,7 +211,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
             guard let _ = data, error == nil else {
                 DispatchQueue.main.async {
-                    self.syWebView.evaluateJavaScript("var logElement = document.getElementById('errorLog');if(logElement){logElement.remove();}", completionHandler: nil)
+                    ViewController.syWebView.evaluateJavaScript("var logElement = document.getElementById('errorLog');if(logElement){logElement.remove();}", completionHandler: nil)
                 }
                 let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
                 Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
