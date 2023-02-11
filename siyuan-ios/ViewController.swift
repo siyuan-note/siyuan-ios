@@ -140,7 +140,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     
     func initKernel () {
         let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        Iosk.MobileStartKernel("ios", Bundle.main.resourcePath, urls[0].path, TimeZone.current.identifier, getIP(), Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh_CN" : "en_US");
+        Iosk.MobileStartKernel("ios", Bundle.main.resourcePath, urls[0].path, TimeZone.current.identifier, getIP(), Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh_CN" : "en_US", UIDevice.current.systemVersion);
     }
     
     func waitFotKernelHttpServing() {
