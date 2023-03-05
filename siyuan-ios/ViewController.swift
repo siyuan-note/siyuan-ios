@@ -41,6 +41,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         }
         
         initKernel()
+        // 移除键盘顶部工具栏
         ViewController.syWebView.hack_removeInputAccessory();
         
         // js 中调用 swift
@@ -56,6 +57,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         ViewController.syWebView.scrollView.isScrollEnabled = false
         ViewController.syWebView.scrollView.delegate = self
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChange), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil)
         
         // 息屏/应用切换
         NotificationCenter.default.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -201,10 +203,16 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
                 if ViewController.syWebView.frame.size.height != mainHeight {
                     ViewController.syWebView.frame.size.height = mainHeight
                 }
-                ViewController.syWebView.evaluateJavaScript("showKeyboardToolbar()")
             }
         }
     }
+    
+    @objc func keyboardWillShow(notification: NSNotification) {
+        if let keyboardSize = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue {
+            ViewController.syWebView.evaluateJavaScript("showKeyboardToolbar(0," + (keyboardSize.height - view.safeAreaInsets.bottom).description + ")")
+        }
+    }
+    
     
     @objc func willEnterForeground(_ notification: NSNotification!) {
         // iOS 端息屏后内核退出，再次进入时重新拉起内核
