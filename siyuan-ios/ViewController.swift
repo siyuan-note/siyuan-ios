@@ -209,7 +209,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     
     @objc func keyboardWillShow(notification: NSNotification) {
         if let keyboardSize = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue {
-            ViewController.syWebView.evaluateJavaScript("showKeyboardToolbar(0," + (keyboardSize.height - view.safeAreaInsets.bottom).description + ")")
+            ViewController.syWebView.evaluateJavaScript("showKeyboardToolbar(" + (keyboardSize.height - view.safeAreaInsets.bottom).description + ")")
         }
     }
     
