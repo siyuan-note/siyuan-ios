@@ -101,7 +101,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
         } else if message.name == "changeStatusBar" {
             let argument = (message.body as! String).split(separator: " ");
-            if (argument[1] == "0") {
+            if (argument.count == 2 && argument[1] == "0") {
                 isDarkStyle = false
             } else {
                 isDarkStyle = true
