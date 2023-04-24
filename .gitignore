@@ -1,5 +1,6 @@
 app/appearance
 app/guide
+app/changelogs
 app/stage
 .DS_Store
 siyuan-ios.xcodeproj/xcshareddata
