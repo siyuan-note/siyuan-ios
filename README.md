@@ -10,3 +10,4 @@
    * appearance
    * guide
    * stage
+   * changelogs
