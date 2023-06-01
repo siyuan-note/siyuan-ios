@@ -42,7 +42,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         
         initKernel()
         
-        ViewController.syWebView.customUserAgent = "SiYuan/" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") + " https://b3log.org/siyuan iOS " + ( WKWebView().value(forKey: "userAgent") as? String ?? "")
+        ViewController.syWebView.customUserAgent = "SiYuan/" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") + " https://b3log.org/siyuan iOS " + (WKWebView().value(forKey: "userAgent") as? String ?? "")
         
         // 移除键盘顶部工具栏
         ViewController.syWebView.hack_removeInputAccessory();
