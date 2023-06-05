@@ -14,6 +14,8 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>zotero</string>
+		<string>http</string>
+		<string>https</string>
 	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
