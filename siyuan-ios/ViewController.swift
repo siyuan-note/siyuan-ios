@@ -36,7 +36,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html") else {
+        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=2.10.4") else {
             return
         }
         
