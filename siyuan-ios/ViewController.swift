@@ -115,32 +115,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         } else if message.name == "setClipboard" {
             UIPasteboard.general.string = (message.body as! String)
         } else if message.name == "openLink" {
-            openURL(message.body as! String)
+            if let url = URL(string: message.body as! String) {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
         }
     }
-    
-    func openExternal(url: String?) {
-        guard let url = url, !url.isEmpty else {
-            return
-        }
 
-        if url.hasPrefix("#") {
-            return
-        }
-
-        if url.hasPrefix("assets/") || url.hasPrefix("/") {
-            openURL("http://127.0.0.1:6806/\(url)")
-            return
-        }
-
-        openURL(url)
-    }
-
-    func openURL(_ urlString: String) {
-        if let url = URL(string: urlString) {
-            UIApplication.shared.open(url, options: [:], completionHandler: nil)
-        }
-    }
     
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         let url = navigationAction.request.url
