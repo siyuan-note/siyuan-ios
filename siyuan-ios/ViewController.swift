@@ -52,6 +52,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         ViewController.syWebView.configuration.userContentController.add(self, name: "startKernelFast")
         ViewController.syWebView.configuration.userContentController.add(self, name: "changeStatusBar")
         ViewController.syWebView.configuration.userContentController.add(self, name: "setClipboard")
+        ViewController.syWebView.configuration.userContentController.add(self, name: "openLink")
         
         // open url
         ViewController.syWebView.navigationDelegate = self
@@ -109,10 +110,35 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             } else {
                 isDarkStyle = true
             }
-            self.view.backgroundColor = UIColor.init(hexString: String(argument[0]))
+            self.view.backgroundColor = UIColor.init(hexString: String(argument[0]), isDarkMode: isDarkStyle)
             setNeedsStatusBarAppearanceUpdate()
         } else if message.name == "setClipboard" {
             UIPasteboard.general.string = (message.body as! String)
+        } else if message.name == "openLink" {
+            openURL(message.body as! String)
+        }
+    }
+    
+    func openExternal(url: String?) {
+        guard let url = url, !url.isEmpty else {
+            return
+        }
+
+        if url.hasPrefix("#") {
+            return
+        }
+
+        if url.hasPrefix("assets/") || url.hasPrefix("/") {
+            openURL("http://127.0.0.1:6806/\(url)")
+            return
+        }
+
+        openURL(url)
+    }
+
+    func openURL(_ urlString: String) {
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url, options: [:], completionHandler: nil)
         }
     }
     
@@ -233,9 +259,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         task.resume()
     }
 }
+
 extension UIColor {
-    convenience init?(hexString: String?) {
-        let input: String! = (hexString ?? "")
+    convenience init?(hexString: String?, isDarkMode: Bool) {
+        var input: String! = (hexString ?? "")
             .replacingOccurrences(of: "#", with: "")
             .uppercased()
         var alpha: CGFloat = 1.0
@@ -266,7 +293,14 @@ extension UIColor {
             blue = Self.colorComponent(from: input, start: 6, length: 2)
             break
         default:
-            NSException.raise(NSExceptionName("Invalid color value"), format: "Color value \"%@\" is invalid.  It should be a hex value of the form #RBG, #ARGB, #RRGGBB, or #AARRGGBB", arguments:getVaList([hexString ?? ""]))
+            if isDarkMode {
+                input = "ffffff"
+            } else {
+                input = "1e1e1e"
+            }
+            red = Self.colorComponent(from: input, start: 0, length: 2)
+            green = Self.colorComponent(from: input, start: 2, length: 2)
+            blue = Self.colorComponent(from: input, start: 4, length: 2)
         }
         self.init(red: red, green: green, blue: blue, alpha: alpha)
     }
