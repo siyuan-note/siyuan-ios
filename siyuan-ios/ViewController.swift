@@ -36,7 +36,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=2.10.4") else {
+        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=3.1.8") else {
             return
         }
         
@@ -115,8 +115,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         } else if message.name == "setClipboard" {
             UIPasteboard.general.string = (message.body as! String)
         } else if message.name == "openLink" {
-            if let url = URL(string: message.body as! String) {
-                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            if let url = NSURL(string: message.body as! String) {
+                UIApplication.shared.open(url as URL, options: [:], completionHandler: nil)
             }
         }
     }
