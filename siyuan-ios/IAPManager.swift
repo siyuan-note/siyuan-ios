@@ -6,6 +6,7 @@
 //
 
 import StoreKit
+import Iosk
 @available(iOS 15.0, *)
 @MainActor
 class IAPManager:ObservableObject {
@@ -13,7 +14,6 @@ class IAPManager:ObservableObject {
     private init() {}
     @Published var productID = ["china00", "china02", "00", "02"]  //  需要内购的产品ID数组
     @Published var products: [Product] = []    // 存储从 App Store 获取的内购商品信息
-    @Published var loadPurchased = false    // 如果开始内购流程，loadPurchased为true，View视图显示加载画布
     // 视图自动加载loadProduct()方法
     func loadProduct() async {
         do {
@@ -27,11 +27,6 @@ class IAPManager:ObservableObject {
             
             self.products = fetchedProducts  // 将获取的内购商品保存到products变量
             print("成功加载产品: \(products)")    // 输出内购商品数组信息
-            if let uuid = UUID(uuidString: "123") {
-                print("UUID: \(uuid)")
-            } else {
-                print("Invalid UUID string")
-            }
         } catch {
             print("加载产品失败：\(error)")    // 输出报错
         }
@@ -48,7 +43,10 @@ class IAPManager:ObservableObject {
                     let transaction = try checkVerified(verification)    // 验证交易
                     savePurchasedState(for: product.id)    // 更新UserDefaults中的购买状态
                     await transaction.finish()    // 告诉系统交易完成
-                    print("交易成功：\(result)")
+                    let response = Iosk.MobileVerifyAppStoreTransaction(uuid.uuidString, String(transaction.id));
+                    DispatchQueue.main.asyncAfter(deadline: .now()) {
+                        ViewController.syWebView.evaluateJavaScript("processIOSPurchaseResponse(" + String(response) + ")")
+                    }
                 case .userCancelled:    // 用户取消交易
                     print("用户取消交易：\(result)")
                 case .pending:    // 购买交易被挂起
@@ -60,10 +58,6 @@ class IAPManager:ObservableObject {
                 print("购买失败：\(error)")
                 await resetProduct()    // 购买失败后重置 product 以便允许再次尝试购买
             }
-            DispatchQueue.main.async {
-                self.loadPurchased = false   // 隐藏内购时的加载画布
-            }
-            print("loadPurchased:\(loadPurchased)")
         }
     }
     // 验证购买结果

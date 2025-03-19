@@ -130,7 +130,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             }
         } else if message.name == "purchase" {
             let argument = (message.body as! String).split(separator: " ");
-            IAPManager.shared.purchaseProduct(IAPManager.shared.products[Int(argument[0])!], uuid: UUID(uuidString: String(argument[1]))!)
+            for pItem in IAPManager.shared.products {
+                if (pItem.id == argument[0]) {
+                    IAPManager.shared.purchaseProduct(pItem, uuid: UUID(uuidString: String(argument[1]))!)
+                    break
+                }
+            }
         }
     }
 
