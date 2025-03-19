@@ -23,20 +23,29 @@ import PDFKit
 import GameController
 
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate, WKScriptMessageHandler {
-
+    
+    static let iapManager = IAPManager.shared
     static let syWebView = WKWebView()
     var keyboardShowed = false
     var isDarkStyle = false
     
+    required init(coder: NSCoder) {
+        super.init(coder: coder)!;
+        Task {
+            await ViewController.iapManager.loadProduct()   // 加载产品信息
+            await ViewController.iapManager.handleTransactions()   // 加载内购交易更新
+        }
+    }
+
     deinit {
        // make sure to remove the observer when this view controller is dismissed/deallocated
        NotificationCenter.default.removeObserver(self)
     }
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=3.1.24") else {
+        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=3.1.25") else {
             return
         }
         
@@ -53,6 +62,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         ViewController.syWebView.configuration.userContentController.add(self, name: "changeStatusBar")
         ViewController.syWebView.configuration.userContentController.add(self, name: "setClipboard")
         ViewController.syWebView.configuration.userContentController.add(self, name: "openLink")
+        ViewController.syWebView.configuration.userContentController.add(self, name: "purchase")
         
         // open url
         ViewController.syWebView.navigationDelegate = self
@@ -118,6 +128,9 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             if let url = NSURL(string: message.body as! String) {
                 UIApplication.shared.open(url as URL, options: [:], completionHandler: nil)
             }
+        } else if message.name == "purchase" {
+            let argument = (message.body as! String).split(separator: " ");
+            IAPManager.shared.purchaseProduct(IAPManager.shared.products[Int(argument[0])!], uuid: UUID(uuidString: String(argument[1]))!)
         }
     }
 

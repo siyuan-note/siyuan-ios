@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		261A2E192D1A5DE100451540 /* libresolv.9.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 261A2E182D1A5DC900451540 /* libresolv.9.tbd */; };
 		2646A9372C3D297B0014E1AC /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 2646A9352C3D297B0014E1AC /* InfoPlist.strings */; };
+		2675C37B2D89642200421174 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2675C37A2D89642200421174 /* StoreKit.framework */; };
+		2675C37D2D8964E300421174 /* IAPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2675C37C2D8964DB00421174 /* IAPManager.swift */; };
+		2675C3812D89C7EA00421174 /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 2675C3802D89C7EA00421174 /* Products.storekit */; };
 		268CE5A2275A68B400DFCFF8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268CE5A1275A68B400DFCFF8 /* AppDelegate.swift */; };
 		268CE5A4275A68B400DFCFF8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268CE5A3275A68B400DFCFF8 /* SceneDelegate.swift */; };
 		268CE5A6275A68B400DFCFF8 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268CE5A5275A68B400DFCFF8 /* ViewController.swift */; };
@@ -25,6 +28,9 @@
 		2646A9382C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Main.strings"; sourceTree = "<group>"; };
 		2646A9392C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/LaunchScreen.strings"; sourceTree = "<group>"; };
 		2646A93A2C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		2675C37A2D89642200421174 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		2675C37C2D8964DB00421174 /* IAPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IAPManager.swift; sourceTree = "<group>"; };
+		2675C3802D89C7EA00421174 /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 		268CE59E275A68B400DFCFF8 /* siyuan-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "siyuan-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		268CE5A1275A68B400DFCFF8 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		268CE5A3275A68B400DFCFF8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -42,6 +48,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2675C37B2D89642200421174 /* StoreKit.framework in Frameworks */,
 				261A2E192D1A5DE100451540 /* libresolv.9.tbd in Frameworks */,
 				26D64CCE28430F4000295E70 /* iosk.xcframework in Frameworks */,
 			);
@@ -71,6 +78,7 @@
 		268CE5A0275A68B400DFCFF8 /* siyuan-ios */ = {
 			isa = PBXGroup;
 			children = (
+				2675C37C2D8964DB00421174 /* IAPManager.swift */,
 				268CE5A1275A68B400DFCFF8 /* AppDelegate.swift */,
 				268CE5A3275A68B400DFCFF8 /* SceneDelegate.swift */,
 				268CE5A5275A68B400DFCFF8 /* ViewController.swift */,
@@ -79,6 +87,7 @@
 				268CE5AC275A68B700DFCFF8 /* LaunchScreen.storyboard */,
 				268CE5AF275A68B700DFCFF8 /* Info.plist */,
 				2646A9352C3D297B0014E1AC /* InfoPlist.strings */,
+				2675C3802D89C7EA00421174 /* Products.storekit */,
 			);
 			path = "siyuan-ios";
 			sourceTree = "<group>";
@@ -86,6 +95,7 @@
 		268CE5B7275A69E800DFCFF8 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				2675C37A2D89642200421174 /* StoreKit.framework */,
 				261A2E182D1A5DC900451540 /* libresolv.9.tbd */,
 				26D64CCD28430F4000295E70 /* iosk.xcframework */,
 			);
@@ -155,6 +165,7 @@
 				268CE5AE275A68B700DFCFF8 /* LaunchScreen.storyboard in Resources */,
 				268CE5AB275A68B700DFCFF8 /* Assets.xcassets in Resources */,
 				268CE5A9275A68B400DFCFF8 /* Main.storyboard in Resources */,
+				2675C3812D89C7EA00421174 /* Products.storekit in Resources */,
 				2646A9372C3D297B0014E1AC /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -166,6 +177,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2675C37D2D8964E300421174 /* IAPManager.swift in Sources */,
 				268CE5A6275A68B400DFCFF8 /* ViewController.swift in Sources */,
 				268CE5A2275A68B400DFCFF8 /* AppDelegate.swift in Sources */,
 				268CE5A4275A68B400DFCFF8 /* SceneDelegate.swift in Sources */,
@@ -338,6 +350,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "siyuan-ios/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = SiYuan;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "将图片插入笔记中 Insert pictures into notes";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "将录音插入笔记中 Insert a recording into a note";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "保存图片到手机 Save picture to phone";
@@ -354,7 +367,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1.24;
+				MARKETING_VERSION = 3.1.25;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -377,6 +390,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "siyuan-ios/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = SiYuan;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "将图片插入笔记中 Insert pictures into notes";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "将录音插入笔记中 Insert a recording into a note";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "保存图片到手机 Save picture to phone";
@@ -393,7 +407,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1.24;
+				MARKETING_VERSION = 3.1.25;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

@@ -1,0 +1,140 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "36353CCB",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "14.99",
+      "familyShareable" : false,
+      "internalID" : "6743463880",
+      "localizations" : [
+        {
+          "description" : "思源笔记功能特性（ld246.com）",
+          "displayName" : "功能特性",
+          "locale" : "zh_CN"
+        }
+      ],
+      "productID" : "china00",
+      "referenceName" : "中国大陆功能特性",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "29.99",
+      "familyShareable" : false,
+      "internalID" : "6743464286",
+      "localizations" : [
+        {
+          "description" : "思源笔记年付订阅（ld246.com）",
+          "displayName" : "年付订阅",
+          "locale" : "zh_CN"
+        }
+      ],
+      "productID" : "china02",
+      "referenceName" : "中国大陆年付订阅",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "92.99",
+      "familyShareable" : false,
+      "internalID" : "6743378396",
+      "localizations" : [
+        {
+          "description" : "SiYuan [PRO Features] plan (liuyun.io)",
+          "displayName" : "PRO Features",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "00",
+      "referenceName" : "海外功能特性",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "249.99",
+      "familyShareable" : false,
+      "internalID" : "6742621393",
+      "localizations" : [
+        {
+          "description" : "SiYuan [Annual Subscription] plan (liuyun.io)",
+          "displayName" : "Subscription",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "02",
+      "referenceName" : "海外年付订阅",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "1583226508",
+    "_developerTeamID" : "FJT3K7XAD8",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 764050266.06534505,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
