@@ -48,10 +48,17 @@ class IAPManager:ObservableObject {
                         ViewController.syWebView.evaluateJavaScript("processIOSPurchaseResponse(" + String(response) + ")")
                     }
                 case .userCancelled:    // 用户取消交易
-                    print("用户取消交易：\(result)")
+                    DispatchQueue.main.asyncAfter(deadline: .now()) {
+                        ViewController.syWebView.evaluateJavaScript("processIOSPurchaseResponse(-10)")
+                    }
                 case .pending:    // 购买交易被挂起
-                    print("购买交易被挂起：\(result)")
+                    DispatchQueue.main.asyncAfter(deadline: .now()) {
+                        ViewController.syWebView.evaluateJavaScript("processIOSPurchaseResponse(-11)")
+                    }
                 default:    // 其他情况
+                    DispatchQueue.main.asyncAfter(deadline: .now()) {
+                        ViewController.syWebView.evaluateJavaScript("processIOSPurchaseResponse(-12)")
+                    }
                     throw StoreError.failedVerification    // 购买失败
                 }
             } catch {
