@@ -22,10 +22,11 @@ import Iosk
 import PDFKit
 import GameController
 
-class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate, WKScriptMessageHandler {
+class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate, WKScriptMessageHandler, UIPrintInteractionControllerDelegate {
     
     static let iapManager = IAPManager.shared
     static let syWebView = WKWebView()
+    var printWebView: WKWebView?
     var keyboardShowed = false
     var isDarkStyle = false
     
@@ -42,10 +43,17 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
        NotificationCenter.default.removeObserver(self)
     }
     
+    func getAppVersion() -> String {
+        if let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+            return appVersion
+        }
+        return "Unknown"
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=3.1.26") else {
+        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=" + getAppVersion()) else {
             return
         }
         
@@ -63,6 +71,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         ViewController.syWebView.configuration.userContentController.add(self, name: "setClipboard")
         ViewController.syWebView.configuration.userContentController.add(self, name: "openLink")
         ViewController.syWebView.configuration.userContentController.add(self, name: "purchase")
+        ViewController.syWebView.configuration.userContentController.add(self, name: "print")
         
         // open url
         ViewController.syWebView.navigationDelegate = self
@@ -136,10 +145,11 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
                     break
                 }
             }
+        } else if message.name == "print" {
+            printDynamicHTML(message.body as! String)
         }
     }
 
-    
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         let url = navigationAction.request.url
         guard url != nil else {
@@ -256,6 +266,44 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         }
         task.resume()
     }
+    
+    private func printDynamicHTML(_ htmlContent: String) {
+            printWebView = WKWebView()
+            printWebView?.navigationDelegate = self
+            printWebView?.loadHTMLString(htmlContent, baseURL: nil)
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            // 确保是我们用于打印的那个 webView 实例完成了加载
+            if webView == self.printWebView {
+                initiatePrintInteraction()
+            }
+        }
+
+        private func initiatePrintInteraction() {
+            guard let printWebView = self.printWebView else { return }
+
+            let printInteractionController = UIPrintInteractionController.shared
+            printInteractionController.delegate = self
+            printInteractionController.printFormatter = printWebView.viewPrintFormatter()
+            
+            let printInfo = UIPrintInfo(dictionary: nil)
+            printInfo.outputType = .general
+            printInfo.jobName = "" // 这里不传的话会使用应用名称“思源笔记”
+            printInteractionController.printInfo = printInfo
+
+            let completionHandler: UIPrintInteractionController.CompletionHandler = { [weak self] (controller, success, error) in
+                self?.printWebView = nil
+            }
+
+            // 根据设备类型显示打印对话框，并传入完成处理程序
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                printInteractionController.present(from: self.view.bounds, in: self.view, animated: true, completionHandler: completionHandler)
+            } else {
+                printInteractionController.present(animated: true, completionHandler: completionHandler)
+            }
+        }
+        
 }
 
 extension UIColor {
