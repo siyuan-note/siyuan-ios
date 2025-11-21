@@ -26,6 +26,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     
     static let iapManager = IAPManager.shared
     static let syWebView = WKWebView()
+    var printTitle = ""
     var printWebView: WKWebView?
     var keyboardShowed = false
     var isDarkStyle = false
@@ -268,41 +269,44 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
     
     private func printDynamicHTML(_ htmlContent: String) {
-            printWebView = WKWebView()
-            printWebView?.navigationDelegate = self
-            printWebView?.loadHTMLString(htmlContent, baseURL: nil)
+        let argument = htmlContent.split(separator: "​");
+        self.printTitle = String(argument[0])
+        printWebView = WKWebView()
+        printWebView?.navigationDelegate = self
+        printWebView?.loadHTMLString(String(argument[1]), baseURL: nil)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // 确保是我们用于打印的那个 webView 实例完成了加载
+        if webView == self.printWebView {
+            initiatePrintInteraction()
+        }
+    }
+
+    private func initiatePrintInteraction() {
+        guard let printWebView = self.printWebView else { return }
+
+        let printInteractionController = UIPrintInteractionController.shared
+        printInteractionController.delegate = self
+        printInteractionController.printFormatter = printWebView.viewPrintFormatter()
+        
+        let printInfo = UIPrintInfo(dictionary: nil)
+        printInfo.outputType = .general
+        printInfo.jobName = self.printTitle
+        printInteractionController.printInfo = printInfo
+
+        let completionHandler: UIPrintInteractionController.CompletionHandler = { [weak self] (controller, success, error) in
+            self?.printTitle = ""
+            self?.printWebView = nil
         }
 
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            // 确保是我们用于打印的那个 webView 实例完成了加载
-            if webView == self.printWebView {
-                initiatePrintInteraction()
-            }
+        // 根据设备类型显示打印对话框，并传入完成处理程序
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            printInteractionController.present(from: self.view.bounds, in: self.view, animated: true, completionHandler: completionHandler)
+        } else {
+            printInteractionController.present(animated: true, completionHandler: completionHandler)
         }
-
-        private func initiatePrintInteraction() {
-            guard let printWebView = self.printWebView else { return }
-
-            let printInteractionController = UIPrintInteractionController.shared
-            printInteractionController.delegate = self
-            printInteractionController.printFormatter = printWebView.viewPrintFormatter()
-            
-            let printInfo = UIPrintInfo(dictionary: nil)
-            printInfo.outputType = .general
-            printInfo.jobName = "" // 这里不传的话会使用应用名称“思源笔记”
-            printInteractionController.printInfo = printInfo
-
-            let completionHandler: UIPrintInteractionController.CompletionHandler = { [weak self] (controller, success, error) in
-                self?.printWebView = nil
-            }
-
-            // 根据设备类型显示打印对话框，并传入完成处理程序
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                printInteractionController.present(from: self.view.bounds, in: self.view, animated: true, completionHandler: completionHandler)
-            } else {
-                printInteractionController.present(animated: true, completionHandler: completionHandler)
-            }
-        }
+    }
         
 }
 
