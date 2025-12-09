@@ -73,6 +73,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         ViewController.syWebView.configuration.userContentController.add(self, name: "openLink")
         ViewController.syWebView.configuration.userContentController.add(self, name: "purchase")
         ViewController.syWebView.configuration.userContentController.add(self, name: "print")
+        ViewController.syWebView.configuration.userContentController.add(self, name: "exit")
         
         // open url
         ViewController.syWebView.navigationDelegate = self
@@ -148,6 +149,9 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             }
         } else if message.name == "print" {
             printDynamicHTML(message.body as! String)
+        } else if message.name == "exit" {
+            UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
+            exit(0)
         }
     }
 
@@ -158,10 +162,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             decisionHandler(.allow)
             return
         }
-        if url!.description == "siyuan://api/system/exit" {
-            decisionHandler(.cancel)
-            UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
-        } else if (
+        
+        if (
             url!.description.lowercased().starts(with: "http://127.0.0.1:6806/assets") == true ||
             url!.description.lowercased().starts(with: "http://127.0.0.1:6806/export") == true || // 导出 Data
             (
