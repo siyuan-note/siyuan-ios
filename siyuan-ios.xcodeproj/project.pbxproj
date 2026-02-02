@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		004F1B3C2F2FF46D006B27B5 /* logo.icon in Resources */ = {isa = PBXBuildFile; fileRef = 004F1B3B2F2FF46D006B27B5 /* logo.icon */; };
 		261A2E192D1A5DE100451540 /* libresolv.9.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 261A2E182D1A5DC900451540 /* libresolv.9.tbd */; };
 		2646A9372C3D297B0014E1AC /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 2646A9352C3D297B0014E1AC /* InfoPlist.strings */; };
 		2675C37B2D89642200421174 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2675C37A2D89642200421174 /* StoreKit.framework */; };
@@ -22,6 +23,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		004F1B3B2F2FF46D006B27B5 /* logo.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = logo.icon; sourceTree = "<group>"; };
 		261A2E182D1A5DC900451540 /* libresolv.9.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.9.tbd; path = usr/lib/libresolv.9.tbd; sourceTree = SDKROOT; };
 		2646A9362C3D297B0014E1AC /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		2646A9382C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Main.strings"; sourceTree = "<group>"; };
@@ -82,6 +84,7 @@
 				268CE5A5275A68B400DFCFF8 /* ViewController.swift */,
 				268CE5A7275A68B400DFCFF8 /* Main.storyboard */,
 				268CE5AA275A68B700DFCFF8 /* Assets.xcassets */,
+				004F1B3B2F2FF46D006B27B5 /* logo.icon */,
 				268CE5AC275A68B700DFCFF8 /* LaunchScreen.storyboard */,
 				268CE5AF275A68B700DFCFF8 /* Info.plist */,
 				2646A9352C3D297B0014E1AC /* InfoPlist.strings */,
@@ -159,6 +162,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				268CE5B6275A68F300DFCFF8 /* app in Resources */,
+				004F1B3C2F2FF46D006B27B5 /* logo.icon in Resources */,
 				268CE5AE275A68B700DFCFF8 /* LaunchScreen.storyboard in Resources */,
 				268CE5AB275A68B700DFCFF8 /* Assets.xcassets in Resources */,
 				268CE5A9275A68B400DFCFF8 /* Main.storyboard in Resources */,
@@ -336,7 +340,7 @@
 		268CE5B3275A68B700DFCFF8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = logo;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -376,7 +380,7 @@
 		268CE5B4275A68B700DFCFF8 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = logo;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;

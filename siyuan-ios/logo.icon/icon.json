@@ -1,0 +1,125 @@
+{
+  "fill-specializations" : [
+    {
+      "value" : "system-light"
+    },
+    {
+      "appearance" : "dark",
+      "value" : "system-dark"
+    }
+  ],
+  "groups" : [
+    {
+      "blur-material" : null,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:1.00000,0.74994"
+              }
+            }
+          ],
+          "glass" : false,
+          "image-name" : "Vector 1.svg",
+          "name" : "Vector 1",
+          "position" : {
+            "scale" : 2,
+            "translation-in-points" : [
+              -252,
+              0
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:1.00000,0.30000"
+              }
+            }
+          ],
+          "glass" : false,
+          "image-name" : "Vector 2.svg",
+          "name" : "Vector 2",
+          "position" : {
+            "scale" : 2,
+            "translation-in-points" : [
+              -76,
+              -24
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:1.00000,0.74994"
+              }
+            }
+          ],
+          "glass" : false,
+          "image-name" : "Vector 3.svg",
+          "name" : "Vector 3",
+          "position" : {
+            "scale" : 2,
+            "translation-in-points" : [
+              76,
+              -24
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:1.00000,0.30000"
+              }
+            }
+          ],
+          "glass" : false,
+          "image-name" : "Vector 4.svg",
+          "name" : "Vector 4",
+          "position" : {
+            "scale" : 2,
+            "translation-in-points" : [
+              252,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting" : "combined",
+      "shadow-specializations" : [
+        {
+          "value" : {
+            "kind" : "layer-color",
+            "opacity" : 0.7
+          }
+        },
+        {
+          "appearance" : "dark",
+          "value" : {
+            "kind" : "layer-color",
+            "opacity" : 0.2
+          }
+        }
+      ],
+      "specular" : false,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
