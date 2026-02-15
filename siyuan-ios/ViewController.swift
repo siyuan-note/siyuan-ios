@@ -21,8 +21,9 @@ import WebKit
 import Iosk
 import PDFKit
 import GameController
+import SafariServices
 
-class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate, WKScriptMessageHandler, UIPrintInteractionControllerDelegate {
+class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate, WKScriptMessageHandler, UIPrintInteractionControllerDelegate, SFSafariViewControllerDelegate {
     
     static let iapManager = IAPManager.shared
     static let syWebView = WKWebView()
@@ -71,6 +72,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         ViewController.syWebView.configuration.userContentController.add(self, name: "changeStatusBar")
         ViewController.syWebView.configuration.userContentController.add(self, name: "setClipboard")
         ViewController.syWebView.configuration.userContentController.add(self, name: "openLink")
+        ViewController.syWebView.configuration.userContentController.add(self, name: "openAuthURL")
         ViewController.syWebView.configuration.userContentController.add(self, name: "purchase")
         ViewController.syWebView.configuration.userContentController.add(self, name: "print")
         ViewController.syWebView.configuration.userContentController.add(self, name: "exit")
@@ -139,6 +141,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             if let url = NSURL(string: message.body as! String) {
                 UIApplication.shared.open(url as URL, options: [:], completionHandler: nil)
             }
+        } else if message.name == "openAuthURL" {
+            openAuthURL(message.body as! String)
         } else if message.name == "purchase" {
             let argument = (message.body as! String).split(separator: " ");
             for pItem in IAPManager.shared.products {
@@ -268,6 +272,40 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             }
         }
         task.resume()
+    }
+    
+    // Open authentication URL using SFSafariViewController
+    // Similar to Android's Custom Tabs implementation
+    private func openAuthURL(_ urlString: String) {
+        // Validate URL
+        guard !urlString.isEmpty, !urlString.hasPrefix("#") else {
+            print("openAuthURL failed: invalid url")
+            return
+        }
+        
+        guard let url = URL(string: urlString) else {
+            print("openAuthURL failed: cannot parse url")
+            return
+        }
+        
+        // Validate scheme (only http/https allowed)
+        guard let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            print("openAuthURL failed: only support http/https protocol, not \(url.scheme ?? "nil")")
+            return
+        }
+        
+        // Use SFSafariViewController (iOS equivalent of Chrome Custom Tabs)
+        let safariVC = SFSafariViewController(url: url)
+        safariVC.delegate = self
+        
+        // Present the Safari view controller
+        self.present(safariVC, animated: true, completion: nil)
+    }
+    
+    // SFSafariViewControllerDelegate method
+    func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+        controller.dismiss(animated: true, completion: nil)
     }
     
     private func printDynamicHTML(_ htmlContent: String) {
