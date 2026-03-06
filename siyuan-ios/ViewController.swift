@@ -74,6 +74,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         ViewController.syWebView.configuration.userContentController.add(self, name: "purchase")
         ViewController.syWebView.configuration.userContentController.add(self, name: "print")
         ViewController.syWebView.configuration.userContentController.add(self, name: "exit")
+        ViewController.syWebView.configuration.userContentController.add(self, name: "sendNotification")
+        ViewController.syWebView.configuration.userContentController.add(self, name: "cancelNotification")
         
         // open url
         ViewController.syWebView.navigationDelegate = self
@@ -152,6 +154,23 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         } else if message.name == "exit" {
             UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
             exit(0)
+        } else if message.name == "sendNotification" {
+            let dict = message.body as? [String: Any];
+            let channel = dict!["channel"] as? String ?? "default"
+            let title = dict!["title"] as? String ?? ""
+            let body = dict!["body"] as? String ?? ""
+            let delay = dict!["delay"] as? Int ?? 0
+            let callback = dict!["callback"] as? String
+            sendNotification(channel: channel, title: title, body: body, delayInSeconds: delay) { id in
+                // 异步将 ID 回传给 JS
+                if let callbackName = callback {
+                    DispatchQueue.main.async {
+                        ViewController.syWebView.evaluateJavaScript((callback ?? "") + "(" + String(id) + ")")
+                    }
+                }
+            }
+        } else if message.name == "cancelNotification" {
+            cancelNotification(id: message.body as! Int)
         }
     }
 
@@ -310,6 +329,42 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         }
     }
         
+    func sendNotification(channel: String, title: String, body: String, delayInSeconds: Int, completion: @escaping (Int) -> Void) {
+        let center = UNUserNotificationCenter.current()
+        let category = UNNotificationCategory(identifier: channel, actions: [], intentIdentifiers: [], options: [])
+        center.setNotificationCategories([category])
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            guard granted else {
+                completion(-1)
+                return
+            }
+
+            let notificationID = Int(Date().timeIntervalSince1970)
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            content.categoryIdentifier = channel
+            
+            var trigger: UNNotificationTrigger? = nil
+            if delayInSeconds > 0 {
+                trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(delayInSeconds), repeats: false)
+            }
+
+            let request = UNNotificationRequest(identifier: String(notificationID), content: content, trigger: trigger)
+            
+            center.add(request) { error in
+                completion(error == nil ? notificationID : -1)
+            }
+        }
+    }
+
+    func cancelNotification(id: Int) {
+        let identifier = String(id)
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        center.removeDeliveredNotifications(withIdentifiers: [identifier])
+    }
 }
 
 extension UIColor {
