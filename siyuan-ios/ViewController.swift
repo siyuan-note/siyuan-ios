@@ -329,7 +329,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         }
     }
         
-    func sendNotification(channel: String, title: String, body: String, delayInSeconds: Int, completion: @escaping (Int) -> Void) {
+    func sendNotification(channel: String, title: String, body: String, delayInSeconds: Int, completion: @escaping (Int64) -> Void) {
         let center = UNUserNotificationCenter.current()
         let category = UNNotificationCategory(identifier: channel, actions: [], intentIdentifiers: [], options: [])
         center.setNotificationCategories([category])
@@ -339,7 +339,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
                 return
             }
 
-            let notificationID = Int(Date().timeIntervalSince1970)
+            let notificationID = Int64(Date().timeIntervalSince1970 * 1000)
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
