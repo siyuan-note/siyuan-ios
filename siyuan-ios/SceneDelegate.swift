@@ -21,6 +21,10 @@ import UIKit
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
+    
+    // Cache to prevent duplicate OIDC callback processing
+    private var lastProcessedOIDCURL: String? = nil
+    private var pendingOIDCCallback: String? = nil
 
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
@@ -29,18 +33,104 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // This delegate does not imply the connecting scene or session are new (see `application:configurationForConnectingSceneSession` instead).
         guard let _ = (scene as? UIWindowScene) else { return }
         for context in connectionOptions.urlContexts{
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                ViewController.syWebView.evaluateJavaScript("openFileByURL('" + context.url.absoluteString + "')")
-            }
+            handleURLContext(context)
         }
     }
     
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         for context in URLContexts{
+            handleURLContext(context)
+        }
+    }
+    
+    // Handle URL context for both OIDC callbacks and block URLs
+    private func handleURLContext(_ context: UIOpenURLContext) {
+        let url = context.url
+        
+        // Check if this is an OIDC callback
+        // OIDC callbacks typically contain certain query parameters or paths
+        if isOIDCCallback(url) {
+            let urlString = url.absoluteString
+            
+            // Prevent duplicate processing
+            if urlString == lastProcessedOIDCURL {
+                print("OIDC callback already processed, skipping: \(urlString)")
+                return
+            }
+            
+            lastProcessedOIDCURL = urlString
+            pendingOIDCCallback = urlString
+            
+            // Use robust callback injection with retry mechanism
+            callHandleOidcCallback(urlString)
+        } else {
+            // Handle regular block URL
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                ViewController.syWebView.evaluateJavaScript("openFileByURL('" + context.url.absoluteString + "')")
+                ViewController.syWebView.evaluateJavaScript("window.openFileByURL('" + url.absoluteString + "')")
             }
         }
+    }
+    
+    // Check if the URL is an OIDC callback
+    private func isOIDCCallback(_ url: URL) -> Bool {
+        // Priority 1: Check if path contains "oidc-callback" (consistent with Android)
+        if url.path.contains("oidc-callback") {
+            return true
+        }
+        
+        // Priority 2: Check if URL contains typical OIDC callback parameters
+        // Common OIDC callback parameters: code, state, error, error_description
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let queryItems = components.queryItems else {
+            return false
+        }
+        
+        // Check for common OIDC callback parameters
+        let oidcParams = ["code", "state", "error", "error_description", "id_token", "access_token"]
+        return queryItems.contains { item in
+            oidcParams.contains(item.name)
+        }
+    }
+    
+    // Robust callback injection with retry mechanism
+    private func callHandleOidcCallback(_ urlString: String, retryCount: Int = 0) {
+        let escapedURL = escapeJavaScriptString(urlString)
+        
+        // Check if the callback function exists
+        ViewController.syWebView.evaluateJavaScript("typeof window.handleOidcCallbackLink === 'function'") { [weak self] result, error in
+            guard let self = self else { return }
+            
+            if let isFunction = result as? Bool, isFunction {
+                // Function exists, call it immediately
+                ViewController.syWebView.evaluateJavaScript("window.handleOidcCallbackLink('\(escapedURL)')") { result, error in
+                    if let error = error {
+                        print("Error calling handleOidcCallbackLink: \(error)")
+                    } else {
+                        print("Successfully called handleOidcCallbackLink")
+                        self.pendingOIDCCallback = nil
+                    }
+                }
+            } else if retryCount < 10 {
+                // Function doesn't exist yet, retry after delay (max 5 seconds)
+                print("handleOidcCallbackLink not ready, retry \(retryCount + 1)/10")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.callHandleOidcCallback(urlString, retryCount: retryCount + 1)
+                }
+            } else {
+                print("Failed to call handleOidcCallbackLink after \(retryCount) retries")
+                self.pendingOIDCCallback = nil
+            }
+        }
+    }
+    
+    // Escape JavaScript string to prevent injection
+    private func escapeJavaScriptString(_ string: String) -> String {
+        return string
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
     }
 
 
