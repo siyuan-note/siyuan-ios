@@ -22,16 +22,16 @@ import Iosk
 import PDFKit
 import GameController
 
-enum Message: String {
-    case startKernelFast = "startKernelFast"
-    case changeStatusBar = "changeStatusBar"
-    case setClipboard = "setClipboard"
-    case openLink = "openLink"
-    case purchase = "purchase"
-    case print = "print"
-    case exit = "exit"
-    case sendNotification = "sendNotification"
-    case cancelNotification = "cancelNotification"
+private enum ScriptMessageName: String {
+    case startKernelFast
+    case changeStatusBar
+    case setClipboard
+    case openLink
+    case purchase
+    case print
+    case exit
+    case sendNotification
+    case cancelNotification
 }
 
 
@@ -80,15 +80,15 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         
         // js 中调用 swift
         ViewController.syWebView.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-        ViewController.syWebView.configuration.userContentController.add(self, name: "startKernelFast")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "changeStatusBar")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "setClipboard")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "openLink")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "purchase")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "print")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "exit")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "sendNotification")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "cancelNotification")
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.startKernelFast.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.changeStatusBar.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.setClipboard.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.openLink.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.purchase.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.print.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.exit.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.sendNotification.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.cancelNotification.rawValue)
         
         // open url
         ViewController.syWebView.navigationDelegate = self
@@ -136,7 +136,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
     
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        switch Message(rawValue: message.name) {
+        switch ScriptMessageName(rawValue: message.name) {
         case .startKernelFast:
             let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
             Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
