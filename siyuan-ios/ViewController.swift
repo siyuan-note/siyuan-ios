@@ -22,6 +22,19 @@ import Iosk
 import PDFKit
 import GameController
 
+private enum ScriptMessageName: String {
+    case startKernelFast
+    case changeStatusBar
+    case setClipboard
+    case openLink
+    case purchase
+    case print
+    case exit
+    case sendNotification
+    case cancelNotification
+}
+
+
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate, WKScriptMessageHandler, UIPrintInteractionControllerDelegate {
     
     static let iapManager = IAPManager.shared
@@ -67,15 +80,15 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         
         // js 中调用 swift
         ViewController.syWebView.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-        ViewController.syWebView.configuration.userContentController.add(self, name: "startKernelFast")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "changeStatusBar")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "setClipboard")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "openLink")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "purchase")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "print")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "exit")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "sendNotification")
-        ViewController.syWebView.configuration.userContentController.add(self, name: "cancelNotification")
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.startKernelFast.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.changeStatusBar.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.setClipboard.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.openLink.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.purchase.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.print.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.exit.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.sendNotification.rawValue)
+        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.cancelNotification.rawValue)
         
         // open url
         ViewController.syWebView.navigationDelegate = self
@@ -123,10 +136,11 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
     
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.name == "startKernelFast" {
+        switch ScriptMessageName(rawValue: message.name) {
+        case .startKernelFast:
             let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
             Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
-        } else if message.name == "changeStatusBar" {
+        case .changeStatusBar:
             let argument = (message.body as! String).split(separator: " ");
             if (argument.count == 2 && argument[1] == "0") {
                 isDarkStyle = false
@@ -135,13 +149,13 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             }
             self.view.backgroundColor = UIColor.init(hexString: String(argument[0]), isDarkMode: isDarkStyle)
             setNeedsStatusBarAppearanceUpdate()
-        } else if message.name == "setClipboard" {
+        case .setClipboard:
             UIPasteboard.general.string = (message.body as! String)
-        } else if message.name == "openLink" {
+        case .openLink:
             if let url = NSURL(string: message.body as! String) {
                 UIApplication.shared.open(url as URL, options: [:], completionHandler: nil)
             }
-        } else if message.name == "purchase" {
+        case .purchase:
             let argument = (message.body as! String).split(separator: " ");
             for pItem in IAPManager.shared.products {
                 if (pItem.id == argument[0]) {
@@ -149,12 +163,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
                     break
                 }
             }
-        } else if message.name == "print" {
+        case .print:
             printDynamicHTML(message.body as! String)
-        } else if message.name == "exit" {
+        case .exit:
             UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
             exit(0)
-        } else if message.name == "sendNotification" {
+        case .sendNotification:
             let dict = message.body as? [String: Any];
             let channel = dict!["channel"] as? String ?? "default"
             let title = dict!["title"] as? String ?? ""
@@ -169,8 +183,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
                     }
                 }
             }
-        } else if message.name == "cancelNotification" {
+        case .cancelNotification:
             cancelNotification(id: message.body as! Int)
+        default:
+            return
         }
     }
 
