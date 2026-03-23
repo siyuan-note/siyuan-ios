@@ -3,6 +3,7 @@ app/guide
 app/changelogs
 app/stage
 .DS_Store
+.idea/
 siyuan-ios.xcodeproj/xcshareddata
-siyuan-ios.xcodeproj/xcuserdata 
+siyuan-ios.xcodeproj/xcuserdata
 siyuan-ios.xcodeproj/project.xcworkspace/xcuserdata/

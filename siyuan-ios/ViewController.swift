@@ -16,456 +16,520 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import UIKit
-import WebKit
+import GameController
 import Iosk
 import PDFKit
-import GameController
+import UIKit
+import WebKit
 
 private enum ScriptMessageName: String {
-    case startKernelFast
-    case changeStatusBar
-    case setClipboard
-    case openLink
-    case purchase
-    case print
-    case exit
-    case sendNotification
-    case cancelNotification
+  case startKernelFast
+  case changeStatusBar
+  case setClipboard
+  case openLink
+  case purchase
+  case print
+  case exit
+  case sendNotification
+  case cancelNotification
 }
 
+class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate,
+  WKScriptMessageHandler, UIPrintInteractionControllerDelegate
+{
 
-class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate, WKScriptMessageHandler, UIPrintInteractionControllerDelegate {
-    
-    static let iapManager = IAPManager.shared
-    static let syWebView = WKWebView()
-    var printTitle = ""
-    var printWebView: WKWebView?
-    var keyboardShowed = false
-    var isDarkStyle = false
-    
-    required init(coder: NSCoder) {
-        super.init(coder: coder)!;
-        Task {
-            await ViewController.iapManager.loadProduct()   // 加载产品信息
-            await ViewController.iapManager.handleTransactions()   // 加载内购交易更新
-        }
-    }
+  static let iapManager = IAPManager.shared
+  static let syWebView = WKWebView()
+  var printTitle = ""
+  var printWebView: WKWebView?
+  var keyboardShowed = false
+  var isDarkStyle = false
 
-    deinit {
-       // make sure to remove the observer when this view controller is dismissed/deallocated
-       NotificationCenter.default.removeObserver(self)
+  required init(coder: NSCoder) {
+    super.init(coder: coder)!
+    Task {
+      await ViewController.iapManager.loadProduct()  // 加载产品信息
+      await ViewController.iapManager.handleTransactions()  // 加载内购交易更新
     }
-    
-    func getAppVersion() -> String {
-        if let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
-            return appVersion
-        }
-        return "Unknown"
+  }
+
+  deinit {
+    // make sure to remove the observer when this view controller is dismissed/deallocated
+    NotificationCenter.default.removeObserver(self)
+  }
+
+  func getAppVersion() -> String {
+    if let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+      return appVersion
     }
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        
-        guard let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=" + getAppVersion()) else {
-            return
-        }
-        
-        initKernel()
-        
-        ViewController.syWebView.customUserAgent = "SiYuan/" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") + " https://b3log.org/siyuan iOS " + (WKWebView().value(forKey: "userAgent") as? String ?? "")
-        
-        // 移除键盘顶部工具栏
-        ViewController.syWebView.hack_removeInputAccessory();
-        
-        // js 中调用 swift
-        ViewController.syWebView.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.startKernelFast.rawValue)
-        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.changeStatusBar.rawValue)
-        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.setClipboard.rawValue)
-        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.openLink.rawValue)
-        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.purchase.rawValue)
-        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.print.rawValue)
-        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.exit.rawValue)
-        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.sendNotification.rawValue)
-        ViewController.syWebView.configuration.userContentController.add(self, name: ScriptMessageName.cancelNotification.rawValue)
-        
-        // open url
-        ViewController.syWebView.navigationDelegate = self
-        
-        // show keyboard
-        ViewController.syWebView.scrollView.isScrollEnabled = false
-        ViewController.syWebView.scrollView.delegate = self
-        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChange), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil)
-        
-        // 息屏/应用切换
-        NotificationCenter.default.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
-        waitFotKernelHttpServing()
-        ViewController.syWebView.load(URLRequest(url: url))
-        
-        view.addSubview(ViewController.syWebView)
-    }
-    
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        if ViewController.syWebView.frame.width != view.safeAreaLayoutGuide.layoutFrame.width || !keyboardShowed {
-            ViewController.syWebView.frame = view.safeAreaLayoutGuide.layoutFrame
-        }
-    }
-    
-    override var prefersHomeIndicatorAutoHidden: Bool {
-        return UIDevice.current.userInterfaceIdiom == .pad
+    return "Unknown"
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+
+    guard
+      let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=" + getAppVersion())
+    else {
+      return
     }
 
-    override var prefersStatusBarHidden: Bool {
-        return UIDevice.current.userInterfaceIdiom == .pad
+    initKernel()
+
+    ViewController.syWebView.customUserAgent =
+      "SiYuan/" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
+      + " https://b3log.org/siyuan iOS " + (WKWebView().value(forKey: "userAgent") as? String ?? "")
+
+    // 移除键盘顶部工具栏
+    ViewController.syWebView.hack_removeInputAccessory()
+
+    // js 中调用 swift
+    ViewController.syWebView.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.startKernelFast.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.changeStatusBar.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.setClipboard.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.openLink.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.purchase.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.print.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.exit.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.sendNotification.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.cancelNotification.rawValue)
+
+    // open url
+    ViewController.syWebView.navigationDelegate = self
+
+    // show keyboard
+    ViewController.syWebView.scrollView.isScrollEnabled = false
+    ViewController.syWebView.scrollView.delegate = self
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(keyboardWillChange),
+      name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification,
+      object: nil)
+
+    // 息屏/应用切换
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(willEnterForeground),
+      name: UIApplication.willEnterForegroundNotification, object: nil)
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(willEnterForeground),
+      name: UIApplication.didBecomeActiveNotification, object: nil)
+    waitFotKernelHttpServing()
+    ViewController.syWebView.load(URLRequest(url: url))
+
+    view.addSubview(ViewController.syWebView)
+  }
+
+  override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    if ViewController.syWebView.frame.width != view.safeAreaLayoutGuide.layoutFrame.width
+      || !keyboardShowed
+    {
+      ViewController.syWebView.frame = view.safeAreaLayoutGuide.layoutFrame
+    }
+  }
+
+  override var prefersHomeIndicatorAutoHidden: Bool {
+    return UIDevice.current.userInterfaceIdiom == .pad
+  }
+
+  override var prefersStatusBarHidden: Bool {
+    return UIDevice.current.userInterfaceIdiom == .pad
+  }
+
+  override var preferredStatusBarStyle: UIStatusBarStyle {
+    return isDarkStyle ? .lightContent : .darkContent
+  }
+
+  func UIColorFromRGB(_ rgbValue: Int) -> UIColor! {
+    return UIColor(
+      red: CGFloat((Float((rgbValue & 0xff0000) >> 16)) / 255.0),
+      green: CGFloat((Float((rgbValue & 0x00ff00) >> 8)) / 255.0),
+      blue: CGFloat((Float((rgbValue & 0x0000ff) >> 0)) / 255.0),
+      alpha: 1.0)
+  }
+
+  func userContentController(
+    _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
+  ) {
+    switch ScriptMessageName(rawValue: message.name) {
+    case .startKernelFast:
+      let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+      Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
+    case .changeStatusBar:
+      let argument = (message.body as! String).split(separator: " ")
+      if argument.count == 2 && argument[1] == "0" {
+        isDarkStyle = false
+      } else {
+        isDarkStyle = true
+      }
+      self.view.backgroundColor = UIColor.init(
+        hexString: String(argument[0]), isDarkMode: isDarkStyle)
+      setNeedsStatusBarAppearanceUpdate()
+    case .setClipboard:
+      UIPasteboard.general.string = (message.body as! String)
+    case .openLink:
+      if let url = NSURL(string: message.body as! String) {
+        UIApplication.shared.open(url as URL, options: [:], completionHandler: nil)
+      }
+    case .purchase:
+      let argument = (message.body as! String).split(separator: " ")
+      for pItem in IAPManager.shared.products {
+        if pItem.id == argument[0] {
+          IAPManager.shared.purchaseProduct(pItem, uuid: UUID(uuidString: String(argument[1]))!)
+          break
+        }
+      }
+    case .print:
+      printDynamicHTML(message.body as! String)
+    case .exit:
+      UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
+      exit(0)
+    case .sendNotification:
+      let dict = message.body as? [String: Any]
+      let channel = dict!["channel"] as? String ?? "default"
+      let title = dict!["title"] as? String ?? ""
+      let body = dict!["body"] as? String ?? ""
+      let delay = dict!["delay"] as? Int ?? 0
+      let callback = dict!["callback"] as? String
+      sendNotification(channel: channel, title: title, body: body, delayInSeconds: delay) { id in
+        // 异步将 ID 回传给 JS
+        if let callbackName = callback {
+          DispatchQueue.main.async {
+            ViewController.syWebView.evaluateJavaScript((callback ?? "") + "(" + String(id) + ")")
+          }
+        }
+      }
+    case .cancelNotification:
+      cancelNotification(id: message.body as! Int)
+    default:
+      return
+    }
+  }
+
+  func webView(
+    _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+    decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+  ) {
+    let url = navigationAction.request.url
+    guard url != nil else {
+      print(url!)
+      decisionHandler(.allow)
+      return
     }
 
-    override var preferredStatusBarStyle: UIStatusBarStyle {
-        return isDarkStyle ? .lightContent : .darkContent
+    if (url!.description.lowercased().starts(with: "http://127.0.0.1:6806/assets") == true
+      || url!.description.lowercased().starts(with: "http://127.0.0.1:6806/export") == true  // 导出 Data
+      || (url!.description.lowercased().starts(with: "http://127.0.0.1:6806") == false
+        && navigationAction.targetFrame?.request != nil
+        && navigationAction.targetFrame?.request.url?.description.lowercased().starts(
+          with: "http://127.0.0.1:6806") == true))
+      && UIApplication.shared.canOpenURL(url!)
+    {
+      decisionHandler(.cancel)
+      UIApplication.shared.open(url!, options: [:], completionHandler: nil)
+    } else if navigationAction.navigationType == .linkActivated
+      && UIApplication.shared.canOpenURL(url!)
+    {
+      decisionHandler(.cancel)
+      UIApplication.shared.open(url!, options: [:], completionHandler: nil)
+    } else {
+      decisionHandler(.allow)
     }
-    
-    func UIColorFromRGB(_ rgbValue: Int) -> UIColor! {
-        return UIColor(
-            red: CGFloat((Float((rgbValue & 0xff0000) >> 16)) / 255.0),
-            green: CGFloat((Float((rgbValue & 0x00ff00) >> 8)) / 255.0),
-            blue: CGFloat((Float((rgbValue & 0x0000ff) >> 0)) / 255.0),
-            alpha: 1.0)
-    }
-    
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        switch ScriptMessageName(rawValue: message.name) {
-        case .startKernelFast:
-            let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-            Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
-        case .changeStatusBar:
-            let argument = (message.body as! String).split(separator: " ");
-            if (argument.count == 2 && argument[1] == "0") {
-                isDarkStyle = false
-            } else {
-                isDarkStyle = true
-            }
-            self.view.backgroundColor = UIColor.init(hexString: String(argument[0]), isDarkMode: isDarkStyle)
-            setNeedsStatusBarAppearanceUpdate()
-        case .setClipboard:
-            UIPasteboard.general.string = (message.body as! String)
-        case .openLink:
-            if let url = NSURL(string: message.body as! String) {
-                UIApplication.shared.open(url as URL, options: [:], completionHandler: nil)
-            }
-        case .purchase:
-            let argument = (message.body as! String).split(separator: " ");
-            for pItem in IAPManager.shared.products {
-                if (pItem.id == argument[0]) {
-                    IAPManager.shared.purchaseProduct(pItem, uuid: UUID(uuidString: String(argument[1]))!)
-                    break
-                }
-            }
-        case .print:
-            printDynamicHTML(message.body as! String)
-        case .exit:
-            UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
-            exit(0)
-        case .sendNotification:
-            let dict = message.body as? [String: Any];
-            let channel = dict!["channel"] as? String ?? "default"
-            let title = dict!["title"] as? String ?? ""
-            let body = dict!["body"] as? String ?? ""
-            let delay = dict!["delay"] as? Int ?? 0
-            let callback = dict!["callback"] as? String
-            sendNotification(channel: channel, title: title, body: body, delayInSeconds: delay) { id in
-                // 异步将 ID 回传给 JS
-                if let callbackName = callback {
-                    DispatchQueue.main.async {
-                        ViewController.syWebView.evaluateJavaScript((callback ?? "") + "(" + String(id) + ")")
-                    }
-                }
-            }
-        case .cancelNotification:
-            cancelNotification(id: message.body as! Int)
-        default:
-            return
-        }
-    }
+  }
 
-    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        let url = navigationAction.request.url
-        guard url != nil else {
-            print(url!)
-            decisionHandler(.allow)
-            return
-        }
-        
-        if (
-            url!.description.lowercased().starts(with: "http://127.0.0.1:6806/assets") == true ||
-            url!.description.lowercased().starts(with: "http://127.0.0.1:6806/export") == true || // 导出 Data
-            (
-                url!.description.lowercased().starts(with: "http://127.0.0.1:6806") == false &&
-                navigationAction.targetFrame?.request != nil && navigationAction.targetFrame?.request.url?.description.lowercased().starts(with: "http://127.0.0.1:6806") == true
-            )
-        ) && UIApplication.shared.canOpenURL(url!) {
-            decisionHandler(.cancel)
-            UIApplication.shared.open(url!, options: [:], completionHandler: nil)
-        } else if navigationAction.navigationType == .linkActivated && UIApplication.shared.canOpenURL(url!) {
-            decisionHandler(.cancel)
-            UIApplication.shared.open(url!, options: [:], completionHandler: nil)
-        } else {
-            decisionHandler(.allow)
-        }
+  func initKernel() {
+    let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+    Iosk.MobileStartKernel(
+      "ios", Bundle.main.resourcePath, urls[0].path, TimeZone.current.identifier, getIP(),
+      Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh_CN" : "en_US",
+      UIDevice.current.systemVersion)
+  }
+
+  func waitFotKernelHttpServing() {
+    for _ in 1...500 {
+      usleep(100000)  // 0.1s
+      if Iosk.MobileIsHttpServing() {
+        break
+      }
     }
-    
-    func initKernel () {
+  }
+
+  func getIP() -> String? {
+    var address: String?
+    var ifaddr: UnsafeMutablePointer<ifaddrs>?
+    if getifaddrs(&ifaddr) == 0 {
+      var ptr = ifaddr
+      while ptr != nil {
+        defer { ptr = ptr?.pointee.ifa_next }  // memory has been renamed to pointee in swift 3 so changed memory to pointee
+        guard let interface = ptr?.pointee else {
+          return nil
+        }
+        let addrFamily = interface.ifa_addr.pointee.sa_family
+        if addrFamily == UInt8(AF_INET) || addrFamily == UInt8(AF_INET6) {
+          guard let ifa_name = interface.ifa_name else {
+            return nil
+          }
+          let name: String = String(cString: ifa_name)
+
+          if name == "en0" {  // String.fromCString() is deprecated in Swift 3. So use the following code inorder to get the exact IP Address.
+            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            getnameinfo(
+              interface.ifa_addr, socklen_t((interface.ifa_addr.pointee.sa_len)), &hostname,
+              socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST)
+            address = String(cString: hostname)
+          }
+        }
+      }
+      freeifaddrs(ifaddr)
+    }
+    return address
+  }
+
+  @objc func keyboardWillChange(notification: NSNotification) {
+    keyboardShowed = true
+    if GCKeyboard.coalesced != nil {
+      if ViewController.syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
+        ViewController.syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
+      }
+    } else {
+      guard let userInfo = notification.userInfo else { return }
+      let endFrameRect = (userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?
+        .cgRectValue
+      if (endFrameRect?.origin.y ?? 0) >= UIScreen.main.bounds.size.height {
+        if ViewController.syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height
+        {
+          ViewController.syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
+        }
+        ViewController.syWebView.evaluateJavaScript("hideKeyboardToolbar()")
+      } else {
+        let mainHeight =
+          view.safeAreaLayoutGuide.layoutFrame.height - (endFrameRect?.height ?? 0)
+          + view.safeAreaInsets.bottom
+        if ViewController.syWebView.frame.size.height != mainHeight {
+          ViewController.syWebView.frame.size.height = mainHeight
+        }
+      }
+    }
+  }
+
+  @objc func keyboardWillShow(notification: NSNotification) {
+    if let keyboardSize =
+      (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
+    {
+      ViewController.syWebView.evaluateJavaScript(
+        "showKeyboardToolbar(" + (keyboardSize.height - view.safeAreaInsets.bottom).description
+          + ")")
+    }
+  }
+
+  @objc func willEnterForeground(_ notification: NSNotification!) {
+    // iOS 端息屏后内核退出，再次进入时重新拉起内核
+    let url = URL(string: "http://127.0.0.1:6806/api/system/version")!
+    let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
+      guard data != nil, error == nil else {
+        DispatchQueue.main.async {
+          ViewController.syWebView.evaluateJavaScript(
+            "var logElement = document.getElementById('errorLog');if(logElement){logElement.remove();}",
+            completionHandler: nil)
+        }
         let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        Iosk.MobileStartKernel("ios", Bundle.main.resourcePath, urls[0].path, TimeZone.current.identifier, getIP(), Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh_CN" : "en_US", UIDevice.current.systemVersion);
+        Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
+        return
+      }
     }
-    
-    func waitFotKernelHttpServing() {
-        for _ in 1...500 {
-            usleep(100000); // 0.1s
-            if (Iosk.MobileIsHttpServing()) {
-                break;
-            }
-        }
-     }
-    
-    func getIP() -> String? {
-        var address: String?
-        var ifaddr: UnsafeMutablePointer<ifaddrs>?
-        if getifaddrs(&ifaddr) == 0 {
-            var ptr = ifaddr
-            while ptr != nil {
-                defer { ptr = ptr?.pointee.ifa_next } // memory has been renamed to pointee in swift 3 so changed memory to pointee
-                guard let interface = ptr?.pointee else {
-                    return nil
-                }
-                let addrFamily = interface.ifa_addr.pointee.sa_family
-                if addrFamily == UInt8(AF_INET) || addrFamily == UInt8(AF_INET6) {
-                    guard let ifa_name = interface.ifa_name else {
-                        return nil
-                    }
-                    let name: String = String(cString: ifa_name)
-                    
-                    if name == "en0" {  // String.fromCString() is deprecated in Swift 3. So use the following code inorder to get the exact IP Address.
-                        var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                        getnameinfo(interface.ifa_addr, socklen_t((interface.ifa_addr.pointee.sa_len)), &hostname, socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST)
-                        address = String(cString: hostname)
-                    }
-                }
-            }
-            freeifaddrs(ifaddr)
-        }
-        return address
+    task.resume()
+  }
+
+  private func printDynamicHTML(_ htmlContent: String) {
+    let argument = htmlContent.split(separator: "​")
+    self.printTitle = String(argument[0])
+    printWebView = WKWebView()
+    printWebView?.navigationDelegate = self
+    printWebView?.loadHTMLString(String(argument[1]), baseURL: nil)
+  }
+
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    // 确保是我们用于打印的那个 webView 实例完成了加载
+    if webView == self.printWebView {
+      initiatePrintInteraction()
     }
-    
-    @objc func keyboardWillChange(notification: NSNotification) {
-        keyboardShowed = true
-        if (GCKeyboard.coalesced != nil) {
-            if ViewController.syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
-                ViewController.syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
-            }
-        } else {
-            guard let userInfo = notification.userInfo else { return }
-            let endFrameRect = (userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
-            if (endFrameRect?.origin.y ?? 0) >= UIScreen.main.bounds.size.height {
-                if ViewController.syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
-                    ViewController.syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
-                }
-                ViewController.syWebView.evaluateJavaScript("hideKeyboardToolbar()")
-            } else {
-                let mainHeight = view.safeAreaLayoutGuide.layoutFrame.height - (endFrameRect?.height ?? 0) + view.safeAreaInsets.bottom
-                if ViewController.syWebView.frame.size.height != mainHeight {
-                    ViewController.syWebView.frame.size.height = mainHeight
-                }
-            }
-        }
-    }
-    
-    @objc func keyboardWillShow(notification: NSNotification) {
-        if let keyboardSize = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue {
-            ViewController.syWebView.evaluateJavaScript("showKeyboardToolbar(" + (keyboardSize.height - view.safeAreaInsets.bottom).description + ")")
-        }
-    }
-    
-    
-    @objc func willEnterForeground(_ notification: NSNotification!) {
-        // iOS 端息屏后内核退出，再次进入时重新拉起内核
-        let url = URL(string: "http://127.0.0.1:6806/api/system/version")!
-        let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
-            guard let _ = data, error == nil else {
-                DispatchQueue.main.async {
-                    ViewController.syWebView.evaluateJavaScript("var logElement = document.getElementById('errorLog');if(logElement){logElement.remove();}", completionHandler: nil)
-                }
-                let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-                Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
-                return
-            }
-        }
-        task.resume()
-    }
-    
-    private func printDynamicHTML(_ htmlContent: String) {
-        let argument = htmlContent.split(separator: "​");
-        self.printTitle = String(argument[0])
-        printWebView = WKWebView()
-        printWebView?.navigationDelegate = self
-        printWebView?.loadHTMLString(String(argument[1]), baseURL: nil)
+  }
+
+  private func initiatePrintInteraction() {
+    guard let printWebView = self.printWebView else { return }
+
+    let printInteractionController = UIPrintInteractionController.shared
+    printInteractionController.delegate = self
+    printInteractionController.printFormatter = printWebView.viewPrintFormatter()
+
+    let printInfo = UIPrintInfo(dictionary: nil)
+    printInfo.outputType = .general
+    printInfo.jobName = self.printTitle
+    printInteractionController.printInfo = printInfo
+
+    let completionHandler: UIPrintInteractionController.CompletionHandler = {
+      [weak self] (controller, success, error) in
+      self?.printTitle = ""
+      self?.printWebView = nil
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // 确保是我们用于打印的那个 webView 实例完成了加载
-        if webView == self.printWebView {
-            initiatePrintInteraction()
-        }
+    // 根据设备类型显示打印对话框，并传入完成处理程序
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      printInteractionController.present(
+        from: self.view.bounds, in: self.view, animated: true, completionHandler: completionHandler)
+    } else {
+      printInteractionController.present(animated: true, completionHandler: completionHandler)
     }
+  }
 
-    private func initiatePrintInteraction() {
-        guard let printWebView = self.printWebView else { return }
+  func sendNotification(
+    channel: String, title: String, body: String, delayInSeconds: Int,
+    completion: @escaping (Int64) -> Void
+  ) {
+    let center = UNUserNotificationCenter.current()
+    let category = UNNotificationCategory(
+      identifier: channel, actions: [], intentIdentifiers: [], options: [])
+    center.setNotificationCategories([category])
+    center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+      guard granted else {
+        completion(-1)
+        return
+      }
 
-        let printInteractionController = UIPrintInteractionController.shared
-        printInteractionController.delegate = self
-        printInteractionController.printFormatter = printWebView.viewPrintFormatter()
-        
-        let printInfo = UIPrintInfo(dictionary: nil)
-        printInfo.outputType = .general
-        printInfo.jobName = self.printTitle
-        printInteractionController.printInfo = printInfo
+      let notificationID = Int64(Date().timeIntervalSince1970 * 1000)
+      let content = UNMutableNotificationContent()
+      content.title = title
+      content.body = body
+      content.sound = .default
+      content.categoryIdentifier = channel
 
-        let completionHandler: UIPrintInteractionController.CompletionHandler = { [weak self] (controller, success, error) in
-            self?.printTitle = ""
-            self?.printWebView = nil
-        }
+      var trigger: UNNotificationTrigger? = nil
+      if delayInSeconds > 0 {
+        trigger = UNTimeIntervalNotificationTrigger(
+          timeInterval: TimeInterval(delayInSeconds), repeats: false)
+      }
 
-        // 根据设备类型显示打印对话框，并传入完成处理程序
-        if UIDevice.current.userInterfaceIdiom == .pad {
-            printInteractionController.present(from: self.view.bounds, in: self.view, animated: true, completionHandler: completionHandler)
-        } else {
-            printInteractionController.present(animated: true, completionHandler: completionHandler)
-        }
+      let request = UNNotificationRequest(
+        identifier: String(notificationID), content: content, trigger: trigger)
+
+      center.add(request) { error in
+        completion(error == nil ? notificationID : -1)
+      }
     }
-        
-    func sendNotification(channel: String, title: String, body: String, delayInSeconds: Int, completion: @escaping (Int64) -> Void) {
-        let center = UNUserNotificationCenter.current()
-        let category = UNNotificationCategory(identifier: channel, actions: [], intentIdentifiers: [], options: [])
-        center.setNotificationCategories([category])
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            guard granted else {
-                completion(-1)
-                return
-            }
+  }
 
-            let notificationID = Int64(Date().timeIntervalSince1970 * 1000)
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
-            content.sound = .default
-            content.categoryIdentifier = channel
-            
-            var trigger: UNNotificationTrigger? = nil
-            if delayInSeconds > 0 {
-                trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(delayInSeconds), repeats: false)
-            }
-
-            let request = UNNotificationRequest(identifier: String(notificationID), content: content, trigger: trigger)
-            
-            center.add(request) { error in
-                completion(error == nil ? notificationID : -1)
-            }
-        }
-    }
-
-    func cancelNotification(id: Int) {
-        let identifier = String(id)
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [identifier])
-        center.removeDeliveredNotifications(withIdentifiers: [identifier])
-    }
+  func cancelNotification(id: Int) {
+    let identifier = String(id)
+    let center = UNUserNotificationCenter.current()
+    center.removePendingNotificationRequests(withIdentifiers: [identifier])
+    center.removeDeliveredNotifications(withIdentifiers: [identifier])
+  }
 }
 
 extension UIColor {
-    convenience init?(hexString: String?, isDarkMode: Bool) {
-        var input: String! = (hexString ?? "")
-            .replacingOccurrences(of: "#", with: "")
-            .uppercased()
-        var alpha: CGFloat = 1.0
-        var red: CGFloat = 0
-        var blue: CGFloat = 0
-        var green: CGFloat = 0
-        switch (input.count) {
-        case 3 /* #RGB */:
-            red = Self.colorComponent(from: input, start: 0, length: 1)
-            green = Self.colorComponent(from: input, start: 1, length: 1)
-            blue = Self.colorComponent(from: input, start: 2, length: 1)
-            break
-        case 4 /* #ARGB */:
-            alpha = Self.colorComponent(from: input, start: 0, length: 1)
-            red = Self.colorComponent(from: input, start: 1, length: 1)
-            green = Self.colorComponent(from: input, start: 2, length: 1)
-            blue = Self.colorComponent(from: input, start: 3, length: 1)
-            break
-        case 6 /* #RRGGBB */:
-            red = Self.colorComponent(from: input, start: 0, length: 2)
-            green = Self.colorComponent(from: input, start: 2, length: 2)
-            blue = Self.colorComponent(from: input, start: 4, length: 2)
-            break
-        case 8 /* #AARRGGBB */:
-            alpha = Self.colorComponent(from: input, start: 0, length: 2)
-            red = Self.colorComponent(from: input, start: 2, length: 2)
-            green = Self.colorComponent(from: input, start: 4, length: 2)
-            blue = Self.colorComponent(from: input, start: 6, length: 2)
-            break
-        default:
-            if isDarkMode {
-                input = "ffffff"
-            } else {
-                input = "1e1e1e"
-            }
-            red = Self.colorComponent(from: input, start: 0, length: 2)
-            green = Self.colorComponent(from: input, start: 2, length: 2)
-            blue = Self.colorComponent(from: input, start: 4, length: 2)
-        }
-        self.init(red: red, green: green, blue: blue, alpha: alpha)
+  convenience init?(hexString: String?, isDarkMode: Bool) {
+    var input: String! = (hexString ?? "")
+      .replacingOccurrences(of: "#", with: "")
+      .uppercased()
+    var alpha: CGFloat = 1.0
+    var red: CGFloat = 0
+    var blue: CGFloat = 0
+    var green: CGFloat = 0
+    switch input.count {
+    case 3 /* #RGB */:
+      red = Self.colorComponent(from: input, start: 0, length: 1)
+      green = Self.colorComponent(from: input, start: 1, length: 1)
+      blue = Self.colorComponent(from: input, start: 2, length: 1)
+      break
+    case 4 /* #ARGB */:
+      alpha = Self.colorComponent(from: input, start: 0, length: 1)
+      red = Self.colorComponent(from: input, start: 1, length: 1)
+      green = Self.colorComponent(from: input, start: 2, length: 1)
+      blue = Self.colorComponent(from: input, start: 3, length: 1)
+      break
+    case 6 /* #RRGGBB */:
+      red = Self.colorComponent(from: input, start: 0, length: 2)
+      green = Self.colorComponent(from: input, start: 2, length: 2)
+      blue = Self.colorComponent(from: input, start: 4, length: 2)
+      break
+    case 8 /* #AARRGGBB */:
+      alpha = Self.colorComponent(from: input, start: 0, length: 2)
+      red = Self.colorComponent(from: input, start: 2, length: 2)
+      green = Self.colorComponent(from: input, start: 4, length: 2)
+      blue = Self.colorComponent(from: input, start: 6, length: 2)
+      break
+    default:
+      if isDarkMode {
+        input = "ffffff"
+      } else {
+        input = "1e1e1e"
+      }
+      red = Self.colorComponent(from: input, start: 0, length: 2)
+      green = Self.colorComponent(from: input, start: 2, length: 2)
+      blue = Self.colorComponent(from: input, start: 4, length: 2)
     }
-    
-    static func colorComponent(from string: String!, start: Int, length: Int) -> CGFloat {
-        let substring = (string as NSString)
-            .substring(with: NSRange(location: start, length: length))
-        let fullHex = length == 2 ? substring : "\(substring)\(substring)"
-        var hexComponent: UInt64 = 0
-        Scanner(string: fullHex)
-            .scanHexInt64(&hexComponent)
-        return CGFloat(Double(hexComponent) / 255.0)
-    }
+    self.init(red: red, green: green, blue: blue, alpha: alpha)
+  }
+
+  static func colorComponent(from string: String!, start: Int, length: Int) -> CGFloat {
+    let substring = (string as NSString)
+      .substring(with: NSRange(location: start, length: length))
+    let fullHex = length == 2 ? substring : "\(substring)\(substring)"
+    var hexComponent: UInt64 = 0
+    Scanner(string: fullHex)
+      .scanHexInt64(&hexComponent)
+    return CGFloat(Double(hexComponent) / 255.0)
+  }
 }
 
-fileprivate final class InputAccessoryHackHelper: NSObject {
-    @objc var inputAccessoryView: AnyObject? { return nil }
+private final class InputAccessoryHackHelper: NSObject {
+  @objc var inputAccessoryView: AnyObject? { return nil }
 }
 
 extension WKWebView {
-    func hack_removeInputAccessory() {
-        guard let target = scrollView.subviews.first(where: {
-            String(describing: type(of: $0)).hasPrefix("WKContent")
-        }), let superclass = target.superclass else {
-            return
-        }
-
-        let noInputAccessoryViewClassName = "\(superclass)_NoInputAccessoryView"
-        var newClass: AnyClass? = NSClassFromString(noInputAccessoryViewClassName)
-
-        if newClass == nil, let targetClass = object_getClass(target), let classNameCString = noInputAccessoryViewClassName.cString(using: .ascii) {
-            newClass = objc_allocateClassPair(targetClass, classNameCString, 0)
-
-            if let newClass = newClass {
-                objc_registerClassPair(newClass)
-            }
-        }
-
-        guard let noInputAccessoryClass = newClass, let originalMethod = class_getInstanceMethod(InputAccessoryHackHelper.self, #selector(getter: InputAccessoryHackHelper.inputAccessoryView)) else {
-            return
-        }
-        class_addMethod(noInputAccessoryClass.self, #selector(getter: InputAccessoryHackHelper.inputAccessoryView), method_getImplementation(originalMethod), method_getTypeEncoding(originalMethod))
-        object_setClass(target, noInputAccessoryClass)
+  func hack_removeInputAccessory() {
+    guard
+      let target = scrollView.subviews.first(where: {
+        String(describing: type(of: $0)).hasPrefix("WKContent")
+      }), let superclass = target.superclass
+    else {
+      return
     }
+
+    let noInputAccessoryViewClassName = "\(superclass)_NoInputAccessoryView"
+    var newClass: AnyClass? = NSClassFromString(noInputAccessoryViewClassName)
+
+    if newClass == nil, let targetClass = object_getClass(target),
+      let classNameCString = noInputAccessoryViewClassName.cString(using: .ascii)
+    {
+      newClass = objc_allocateClassPair(targetClass, classNameCString, 0)
+
+      if let newClass = newClass {
+        objc_registerClassPair(newClass)
+      }
+    }
+
+    guard let noInputAccessoryClass = newClass,
+      let originalMethod = class_getInstanceMethod(
+        InputAccessoryHackHelper.self,
+        #selector(getter: InputAccessoryHackHelper.inputAccessoryView))
+    else {
+      return
+    }
+    class_addMethod(
+      noInputAccessoryClass.self, #selector(getter: InputAccessoryHackHelper.inputAccessoryView),
+      method_getImplementation(originalMethod), method_getTypeEncoding(originalMethod))
+    object_setClass(target, noInputAccessoryClass)
+  }
 }
