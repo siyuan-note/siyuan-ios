@@ -446,14 +446,18 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   func saveExportFile(uri: String) {
-    var fullUrl = uri
-    if fullUrl.hasPrefix("/") {
-      fullUrl = "http://127.0.0.1:6806" + fullUrl
-    } else if fullUrl.hasPrefix("assets/") {
-      fullUrl = "http://127.0.0.1:6806/" + fullUrl
+    var urlString = uri
+    if urlString.hasPrefix("/") {
+      urlString = "http://127.0.0.1:6806" + urlString
+    } else if urlString.hasPrefix("assets/") {
+      urlString = "http://127.0.0.1:6806/" + urlString
     }
 
-    var fileName = (fullUrl as NSString).lastPathComponent
+    guard let url = URL(string: urlString) else {
+      return
+    }
+
+    var fileName = url.lastPathComponent
     if let queryIdx = fileName.firstIndex(of: "?") {
       fileName = String(fileName[..<queryIdx])
     }
@@ -462,11 +466,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       fileName = "export"
     }
 
-    guard let url = URL(string: fullUrl) else {
-      return
-    }
-
-    let task = URLSession.shared.downloadTask(with: url) { (tempURL, response, error) in
+    let task = URLSession.shared.downloadTask(with: url) { [weak self] (tempURL, response, error) in
+      guard let self = self else { return }
       guard let tempURL = tempURL, error == nil else {
         print("saveExportFile download failed: \(error?.localizedDescription ?? "unknown")")
         return
@@ -480,12 +481,15 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       do {
         try fileManager.moveItem(at: tempURL, to: destURL)
 
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+          guard let self = self else { return }
           let activityVC = UIActivityViewController(
             activityItems: [destURL], applicationActivities: nil)
 
           if UIDevice.current.userInterfaceIdiom == .pad {
             activityVC.popoverPresentationController?.sourceView = self.view
+            activityVC.popoverPresentationController?.sourceRect = CGRect(
+              x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
           }
 
           self.present(activityVC, animated: true)
