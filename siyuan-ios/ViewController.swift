@@ -27,6 +27,7 @@ private enum ScriptMessageName: String {
   case changeStatusBar
   case setClipboard
   case openLink
+  case saveExportFile
   case purchase
   case print
   case exit
@@ -93,6 +94,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, name: ScriptMessageName.setClipboard.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
       self, name: ScriptMessageName.openLink.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.saveExportFile.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
       self, name: ScriptMessageName.purchase.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
@@ -186,6 +189,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       if let url = NSURL(string: message.body as! String) {
         UIApplication.shared.open(url as URL, options: [:], completionHandler: nil)
       }
+    case .saveExportFile:
+      saveExportFile(uri: message.body as! String)
     case .purchase:
       let argument = (message.body as! String).split(separator: " ")
       for pItem in IAPManager.shared.products {
@@ -438,6 +443,58 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     let center = UNUserNotificationCenter.current()
     center.removePendingNotificationRequests(withIdentifiers: [identifier])
     center.removeDeliveredNotifications(withIdentifiers: [identifier])
+  }
+
+  func saveExportFile(uri: String) {
+    var fullUrl = uri
+    if fullUrl.hasPrefix("/") {
+      fullUrl = "http://127.0.0.1:6806" + fullUrl
+    } else if fullUrl.hasPrefix("assets/") {
+      fullUrl = "http://127.0.0.1:6806/" + fullUrl
+    }
+
+    var fileName = (fullUrl as NSString).lastPathComponent
+    if let queryIdx = fileName.firstIndex(of: "?") {
+      fileName = String(fileName[..<queryIdx])
+    }
+    fileName = fileName.removingPercentEncoding ?? fileName
+    if fileName.isEmpty {
+      fileName = "export"
+    }
+
+    guard let url = URL(string: fullUrl) else {
+      return
+    }
+
+    let task = URLSession.shared.downloadTask(with: url) { (tempURL, response, error) in
+      guard let tempURL = tempURL, error == nil else {
+        print("saveExportFile download failed: \(error?.localizedDescription ?? "unknown")")
+        return
+      }
+
+      let fileManager = FileManager.default
+      let destURL = fileManager.temporaryDirectory.appendingPathComponent(fileName)
+
+      try? fileManager.removeItem(at: destURL)
+
+      do {
+        try fileManager.moveItem(at: tempURL, to: destURL)
+
+        DispatchQueue.main.async {
+          let activityVC = UIActivityViewController(
+            activityItems: [destURL], applicationActivities: nil)
+
+          if UIDevice.current.userInterfaceIdiom == .pad {
+            activityVC.popoverPresentationController?.sourceView = self.view
+          }
+
+          self.present(activityVC, animated: true)
+        }
+      } catch {
+        print("saveExportFile move failed: \(error.localizedDescription)")
+      }
+    }
+    task.resume()
   }
 }
 
