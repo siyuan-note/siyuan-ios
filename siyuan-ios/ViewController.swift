@@ -129,7 +129,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       name: UIApplication.didBecomeActiveNotification, object: nil)
     NotificationCenter.default.addObserver(
       self, selector: #selector(protectedDataDidBecomeUnavailable),
-      name: UIApplication.protectedDataDidBecomeUnavailableNotification, object: nil)
+      name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
     waitFotKernelHttpServing()
     ViewController.syWebView.load(URLRequest(url: url))
     #if DEBUG

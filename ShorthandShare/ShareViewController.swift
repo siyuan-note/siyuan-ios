@@ -176,10 +176,9 @@ class ShareViewController: UIViewController, UITextViewDelegate {
             forSecurityApplicationGroupIdentifier: "group.org.b3log.siyuan")
         return (containerURL?.path ?? NSTemporaryDirectory()) + "/home/.config/siyuan/shortcuts/shorthands/"
     }
-}
-
-extension ShareViewController: UITextViewDelegate {
+    
     func textViewDidChange(_ textView: UITextView) {
         placeholderLabel.isHidden = !textView.text.isEmpty
     }
 }
+

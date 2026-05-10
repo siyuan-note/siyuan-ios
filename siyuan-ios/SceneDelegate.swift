@@ -78,7 +78,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Donate shortcut for Siri/Shortcuts
         let activity = NSUserActivity(activityType: "com.b3log.siyuan.shorthand")
         activity.title = NSLocalizedString("shorthand_label", comment: "")
-        activity.suggestedInvocationPhrase = NSLocalizedString("shorthand_label", comment: "")
         activity.isEligibleForSearch = true
         activity.isEligibleForPrediction = true
         activity.persistentIdentifier = NSUserActivityPersistentIdentifier("com.b3log.siyuan.shorthand")

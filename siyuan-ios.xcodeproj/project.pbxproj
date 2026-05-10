@@ -3,14 +3,15 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 55;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2605291F443EB855AA534C4D /* ShorthandViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */; };
 		004F1B3C2F2FF46D006B27B5 /* logo.icon in Resources */ = {isa = PBXBuildFile; fileRef = 004F1B3B2F2FF46D006B27B5 /* logo.icon */; };
+		2605291F443EB855AA534C4D /* ShorthandViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */; };
 		261A2E192D1A5DE100451540 /* libresolv.9.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 261A2E182D1A5DC900451540 /* libresolv.9.tbd */; };
 		2646A9372C3D297B0014E1AC /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 2646A9352C3D297B0014E1AC /* InfoPlist.strings */; };
+		2674E0772FB0BFF5007BADF5 /* ShorthandShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2674E06D2FB0BFF5007BADF5 /* ShorthandShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2675C37B2D89642200421174 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2675C37A2D89642200421174 /* StoreKit.framework */; };
 		2675C37D2D8964E300421174 /* IAPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2675C37C2D8964DB00421174 /* IAPManager.swift */; };
 		268CE5A2275A68B400DFCFF8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268CE5A1275A68B400DFCFF8 /* AppDelegate.swift */; };
@@ -23,14 +24,38 @@
 		26D64CCE28430F4000295E70 /* iosk.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 26D64CCD28430F4000295E70 /* iosk.xcframework */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		2674E0752FB0BFF5007BADF5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 268CE596275A68B400DFCFF8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2674E06C2FB0BFF5007BADF5;
+			remoteInfo = ShorthandShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2674E0782FB0BFF5007BADF5 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2674E0772FB0BFF5007BADF5 /* ShorthandShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandViewController.swift; sourceTree = "<group>"; };
 		004F1B3B2F2FF46D006B27B5 /* logo.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = logo.icon; sourceTree = "<group>"; };
 		261A2E182D1A5DC900451540 /* libresolv.9.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.9.tbd; path = usr/lib/libresolv.9.tbd; sourceTree = SDKROOT; };
 		2646A9362C3D297B0014E1AC /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		2646A9382C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Main.strings"; sourceTree = "<group>"; };
 		2646A9392C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/LaunchScreen.strings"; sourceTree = "<group>"; };
 		2646A93A2C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		2674E06D2FB0BFF5007BADF5 /* ShorthandShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShorthandShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2675C37A2D89642200421174 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		2675C37C2D8964DB00421174 /* IAPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IAPManager.swift; sourceTree = "<group>"; };
 		268CE59E275A68B400DFCFF8 /* siyuan-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "siyuan-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -42,10 +67,33 @@
 		268CE5AD275A68B700DFCFF8 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		268CE5AF275A68B700DFCFF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		268CE5B5275A68F300DFCFF8 /* app */ = {isa = PBXFileReference; lastKnownFileType = folder; path = app; sourceTree = "<group>"; };
+		26C9D7222FB0C22A00635896 /* siyuan-ios.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "siyuan-ios.entitlements"; sourceTree = "<group>"; };
 		26D64CCD28430F4000295E70 /* iosk.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = iosk.xcframework; path = ../siyuan/kernel/ios/iosk.xcframework; sourceTree = "<group>"; };
+		B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		2674E07B2FB0BFF5007BADF5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2674E06C2FB0BFF5007BADF5 /* ShorthandShare */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		2674E06E2FB0BFF5007BADF5 /* ShorthandShare */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (2674E07B2FB0BFF5007BADF5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ShorthandShare; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
+		2674E06A2FB0BFF5007BADF5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		268CE59B275A68B400DFCFF8 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -64,6 +112,7 @@
 			children = (
 				268CE5B5275A68F300DFCFF8 /* app */,
 				268CE5A0275A68B400DFCFF8 /* siyuan-ios */,
+				2674E06E2FB0BFF5007BADF5 /* ShorthandShare */,
 				268CE59F275A68B400DFCFF8 /* Products */,
 				268CE5B7275A69E800DFCFF8 /* Frameworks */,
 			);
@@ -73,6 +122,7 @@
 			isa = PBXGroup;
 			children = (
 				268CE59E275A68B400DFCFF8 /* siyuan-ios.app */,
+				2674E06D2FB0BFF5007BADF5 /* ShorthandShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -80,6 +130,7 @@
 		268CE5A0275A68B400DFCFF8 /* siyuan-ios */ = {
 			isa = PBXGroup;
 			children = (
+				26C9D7222FB0C22A00635896 /* siyuan-ios.entitlements */,
 				2675C37C2D8964DB00421174 /* IAPManager.swift */,
 				268CE5A1275A68B400DFCFF8 /* AppDelegate.swift */,
 				268CE5A3275A68B400DFCFF8 /* SceneDelegate.swift */,
@@ -108,6 +159,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		2674E06C2FB0BFF5007BADF5 /* ShorthandShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2674E07C2FB0BFF5007BADF5 /* Build configuration list for PBXNativeTarget "ShorthandShare" */;
+			buildPhases = (
+				2674E0692FB0BFF5007BADF5 /* Sources */,
+				2674E06A2FB0BFF5007BADF5 /* Frameworks */,
+				2674E06B2FB0BFF5007BADF5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2674E06E2FB0BFF5007BADF5 /* ShorthandShare */,
+			);
+			name = ShorthandShare;
+			packageProductDependencies = (
+			);
+			productName = ShorthandShare;
+			productReference = 2674E06D2FB0BFF5007BADF5 /* ShorthandShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		268CE59D275A68B400DFCFF8 /* siyuan-ios */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 268CE5B2275A68B700DFCFF8 /* Build configuration list for PBXNativeTarget "siyuan-ios" */;
@@ -115,10 +188,12 @@
 				268CE59A275A68B400DFCFF8 /* Sources */,
 				268CE59B275A68B400DFCFF8 /* Frameworks */,
 				268CE59C275A68B400DFCFF8 /* Resources */,
+				2674E0782FB0BFF5007BADF5 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2674E0762FB0BFF5007BADF5 /* PBXTargetDependency */,
 			);
 			name = "siyuan-ios";
 			productName = "siyuan-ios";
@@ -132,9 +207,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastSwiftUpdateCheck = 1310;
+				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 1530;
 				TargetAttributes = {
+					2674E06C2FB0BFF5007BADF5 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
 					268CE59D275A68B400DFCFF8 = {
 						CreatedOnToolsVersion = 13.1;
 					};
@@ -155,11 +233,19 @@
 			projectRoot = "";
 			targets = (
 				268CE59D275A68B400DFCFF8 /* siyuan-ios */,
+				2674E06C2FB0BFF5007BADF5 /* ShorthandShare */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		2674E06B2FB0BFF5007BADF5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		268CE59C275A68B400DFCFF8 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -176,6 +262,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2674E0692FB0BFF5007BADF5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		268CE59A275A68B400DFCFF8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -189,6 +282,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2674E0762FB0BFF5007BADF5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2674E06C2FB0BFF5007BADF5 /* ShorthandShare */;
+			targetProxy = 2674E0752FB0BFF5007BADF5 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		2646A9352C3D297B0014E1AC /* InfoPlist.strings */ = {
@@ -221,6 +322,77 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		2674E0792FB0BFF5007BADF5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = ShorthandShare/ShorthandShare.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = FJT3K7XAD8;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShorthandShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ShorthandShare;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = NO;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "-lresolv";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2674E07A2FB0BFF5007BADF5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = ShorthandShare/ShorthandShare.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = FJT3K7XAD8;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShorthandShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ShorthandShare;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				OTHER_LDFLAGS = "-lresolv";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = NO;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		268CE5B0275A68B700DFCFF8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -346,6 +518,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = logo;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "siyuan-ios/siyuan-ios.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -386,6 +559,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = logo;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "siyuan-ios/siyuan-ios.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -424,6 +598,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2674E07C2FB0BFF5007BADF5 /* Build configuration list for PBXNativeTarget "ShorthandShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2674E0792FB0BFF5007BADF5 /* Debug */,
+				2674E07A2FB0BFF5007BADF5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		268CE599275A68B400DFCFF8 /* Build configuration list for PBXProject "siyuan-ios" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

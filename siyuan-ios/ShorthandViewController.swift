@@ -138,10 +138,12 @@ class ShorthandTextView: UITextView {
         let pasteboard = UIPasteboard.general
         if pasteboard.contains(pasteboardTypes: [UTType.html.identifier]) {
             if let htmlData = pasteboard.data(forPasteboardType: UTType.html.identifier),
-               let html = String(data: htmlData, encoding: .utf8),
-               let md = Iosk.MobileHTML2Markdown(html), !md.isEmpty {
-                insertText(md)
-                return
+               let html = String(data: htmlData, encoding: .utf8) {
+                let md = Iosk.MobileHTML2Markdown(html)
+                if !md.isEmpty {
+                    insertText(md)
+                    return
+                }
             }
         }
         super.paste(sender)
