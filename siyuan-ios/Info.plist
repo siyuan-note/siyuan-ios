@@ -41,6 +41,10 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.b3log.siyuan.shorthand</string>
+	</array>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>

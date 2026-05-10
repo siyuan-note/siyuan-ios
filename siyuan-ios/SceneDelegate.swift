@@ -73,8 +73,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             vc.appendText(t)
         }
         
-        // Present modally
         rootVC.present(vc, animated: true)
+        
+        // Donate shortcut for Siri/Shortcuts
+        let activity = NSUserActivity(activityType: "com.b3log.siyuan.shorthand")
+        activity.title = NSLocalizedString("shorthand_label", comment: "")
+        activity.suggestedInvocationPhrase = NSLocalizedString("shorthand_label", comment: "")
+        activity.isEligibleForSearch = true
+        activity.isEligibleForPrediction = true
+        activity.persistentIdentifier = NSUserActivityPersistentIdentifier("com.b3log.siyuan.shorthand")
+        vc.userActivity = activity
+        activity.becomeCurrent()
     }
 
 
@@ -105,6 +114,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             presentShorthand()
         }
         completionHandler(true)
+    }
+    
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        if userActivity.activityType == "com.b3log.siyuan.shorthand" {
+            presentShorthand()
+        }
     }
     
     private func moveSharedShorthands() {
