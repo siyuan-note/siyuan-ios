@@ -23,6 +23,7 @@ import UniformTypeIdentifiers
 class ShorthandViewController: UIViewController {
 
     private let textView = ShorthandTextView()
+    private let titleLabel = UILabel()
     private let submitButton = UIButton(type: .system)
     private let placeholderLabel = UILabel()
 
@@ -33,12 +34,31 @@ class ShorthandViewController: UIViewController {
     }
 
     private func setupUI() {
-        // Submit button
+        // Title bar
+        let titleBar = UIStackView(arrangedSubviews: [titleLabel, submitButton])
+        titleBar.axis = .horizontal
+        titleBar.alignment = .center
+        titleBar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(titleBar)
+
+        titleLabel.text = NSLocalizedString("shorthand_label", comment: "")
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 18)
+
         submitButton.setTitle(NSLocalizedString("Submit", comment: ""), for: .normal)
         submitButton.addTarget(self, action: #selector(onSubmit), for: .touchUpInside)
         submitButton.isEnabled = false
-        submitButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(submitButton)
+        submitButton.backgroundColor = .systemBlue
+        submitButton.setTitleColor(.white, for: .normal)
+        submitButton.setTitleColor(.lightGray, for: .disabled)
+        submitButton.titleLabel?.font = UIFont.systemFont(ofSize: 14)
+        submitButton.layer.cornerRadius = 6
+        submitButton.contentEdgeInsets = UIEdgeInsets(top: 4, left: 12, bottom: 4, right: 12)
+
+        // Separator
+        let separator = UIView()
+        separator.backgroundColor = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(separator)
 
         // Text view
         textView.font = UIFont.systemFont(ofSize: 16)
@@ -55,12 +75,17 @@ class ShorthandViewController: UIViewController {
         view.addSubview(placeholderLabel)
 
         NSLayoutConstraint.activate([
-            submitButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            submitButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            submitButton.widthAnchor.constraint(equalToConstant: 200),
-            submitButton.heightAnchor.constraint(equalToConstant: 44),
+            titleBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            titleBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            titleBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+            titleBar.heightAnchor.constraint(equalToConstant: 48),
 
-            textView.topAnchor.constraint(equalTo: submitButton.bottomAnchor, constant: 8),
+            separator.topAnchor.constraint(equalTo: titleBar.bottomAnchor),
+            separator.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            separator.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            separator.heightAnchor.constraint(equalToConstant: 0.5),
+
+            textView.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 8),
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             textView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
