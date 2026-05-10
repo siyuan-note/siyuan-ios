@@ -127,6 +127,9 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     NotificationCenter.default.addObserver(
       self, selector: #selector(willEnterForeground),
       name: UIApplication.didBecomeActiveNotification, object: nil)
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(protectedDataDidBecomeUnavailable),
+      name: UIApplication.protectedDataDidBecomeUnavailableNotification, object: nil)
     waitFotKernelHttpServing()
     ViewController.syWebView.load(URLRequest(url: url))
     #if DEBUG
@@ -358,6 +361,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       }
     }
     task.resume()
+  }
+
+  @objc func protectedDataDidBecomeUnavailable(_ notification: NSNotification!) {
+    ViewController.syWebView.evaluateJavaScript("window.lockscreenByMode && window.lockscreenByMode()")
   }
 
   private func printDynamicHTML(_ htmlContent: String) {

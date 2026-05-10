@@ -21,13 +21,18 @@ import UIKit
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
-
+    private var shorthandVC: ShorthandViewController?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        // Use this method to optionally configure and attach the UIWindow `window` to the provided UIWindowScene `scene`.
-        // If using a storyboard, the `window` property will automatically be initialized and attached to the scene.
-        // This delegate does not imply the connecting scene or session are new (see `application:configurationForConnectingSceneSession` instead).
         guard let _ = (scene as? UIWindowScene) else { return }
+        
+        if let shortcutItem = connectionOptions.shortcutItem,
+           shortcutItem.type == "com.b3log.siyuan.shorthand" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                self?.presentShorthand()
+            }
+        }
+        
         for context in connectionOptions.urlContexts{
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
                 ViewController.syWebView.evaluateJavaScript("openFileByURL('" + context.url.absoluteString + "')")
@@ -37,11 +42,41 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         for context in URLContexts{
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                ViewController.syWebView.evaluateJavaScript("openFileByURL('" + context.url.absoluteString + "')")
+            let url = context.url
+            if url.scheme == "siyuan" && url.host == "shorthand" {
+                presentShorthand(text: url.query?.removingPercentEncoding)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    ViewController.syWebView.evaluateJavaScript("openFileByURL('" + url.absoluteString + "')")
+                }
             }
         }
     }
+    
+    private func presentShorthand(text: String? = nil) {
+        guard let rootVC = window?.rootViewController else { return }
+        
+        if let existing = shorthandVC {
+            if let t = text, !t.isEmpty {
+                existing.appendText(t)
+            }
+            if existing.presentingViewController == nil && rootVC.presentedViewController != existing {
+                rootVC.present(existing, animated: true)
+            }
+            return
+        }
+        
+        let vc = ShorthandViewController()
+        shorthandVC = vc
+        
+        if let t = text, !t.isEmpty {
+            vc.appendText(t)
+        }
+        
+        // Present modally
+        rootVC.present(vc, animated: true)
+    }
+
 
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -62,8 +97,39 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
-        // Called as the scene transitions from the background to the foreground.
-        // Use this method to undo the changes made on entering the background.
+        moveSharedShorthands()
+    }
+    
+    func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
+        if shortcutItem.type == "com.b3log.siyuan.shorthand" {
+            presentShorthand()
+        }
+        completionHandler(true)
+    }
+    
+    private func moveSharedShorthands() {
+        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.org.b3log.siyuan") else {
+            return
+        }
+        let sharedDir = containerURL.path + "/home/.config/siyuan/shortcuts/shorthands/"
+        let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let targetDir = urls[0].path + "/home/.config/siyuan/shortcuts/shorthands/"
+        
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: sharedDir) else { return }
+        
+        try? fm.createDirectory(atPath: targetDir, withIntermediateDirectories: true, attributes: nil)
+        
+        guard let entries = try? fm.contentsOfDirectory(atPath: sharedDir) else { return }
+        for entry in entries {
+            let src = sharedDir + entry
+            let dst = targetDir + entry
+            if fm.fileExists(atPath: dst) {
+                try? fm.removeItem(atPath: dst)
+            }
+            try? fm.moveItem(atPath: src, toPath: dst)
+        }
+        try? fm.removeItem(atPath: sharedDir)
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
