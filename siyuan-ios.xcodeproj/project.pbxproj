@@ -11,6 +11,7 @@
 		2605291F443EB855AA534C4D /* ShorthandViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */; };
 		261A2E192D1A5DE100451540 /* libresolv.9.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 261A2E182D1A5DC900451540 /* libresolv.9.tbd */; };
 		2646A9372C3D297B0014E1AC /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 2646A9352C3D297B0014E1AC /* InfoPlist.strings */; };
+		A1B2C3D4E5F6111100010001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6111100010004 /* Localizable.strings */; };
 		2674E0772FB0BFF5007BADF5 /* ShorthandShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2674E06D2FB0BFF5007BADF5 /* ShorthandShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2675C37B2D89642200421174 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2675C37A2D89642200421174 /* StoreKit.framework */; };
 		2675C37D2D8964E300421174 /* IAPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2675C37C2D8964DB00421174 /* IAPManager.swift */; };
@@ -55,6 +56,8 @@
 		2646A9382C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Main.strings"; sourceTree = "<group>"; };
 		2646A9392C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/LaunchScreen.strings"; sourceTree = "<group>"; };
 		2646A93A2C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		A1B2C3D4E5F6111100010002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		A1B2C3D4E5F6111100010003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		2674E06D2FB0BFF5007BADF5 /* ShorthandShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShorthandShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2675C37A2D89642200421174 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		2675C37C2D8964DB00421174 /* IAPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IAPManager.swift; sourceTree = "<group>"; };
@@ -142,6 +145,7 @@
 				268CE5AC275A68B700DFCFF8 /* LaunchScreen.storyboard */,
 				268CE5AF275A68B700DFCFF8 /* Info.plist */,
 				2646A9352C3D297B0014E1AC /* InfoPlist.strings */,
+				A1B2C3D4E5F6111100010004 /* Localizable.strings */,
 			);
 			path = "siyuan-ios";
 			sourceTree = "<group>";
@@ -256,6 +260,7 @@
 				268CE5AB275A68B700DFCFF8 /* Assets.xcassets in Resources */,
 				268CE5A9275A68B400DFCFF8 /* Main.storyboard in Resources */,
 				2646A9372C3D297B0014E1AC /* InfoPlist.strings in Resources */,
+				A1B2C3D4E5F6111100010001 /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -299,6 +304,15 @@
 				2646A93A2C3D29D00014E1AC /* zh-Hans */,
 			);
 			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6111100010004 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A1B2C3D4E5F6111100010002 /* en */,
+				A1B2C3D4E5F6111100010003 /* zh-Hans */,
+			);
+			name = Localizable.strings;
 			sourceTree = "<group>";
 		};
 		268CE5A7275A68B400DFCFF8 /* Main.storyboard */ = {

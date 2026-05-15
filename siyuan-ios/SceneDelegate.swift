@@ -24,20 +24,33 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var shorthandVC: ShorthandViewController?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        guard let _ = (scene as? UIWindowScene) else { return }
+        let isShorthand = (connectionOptions.shortcutItem?.type == "com.b3log.siyuan.shorthand") ||
+            connectionOptions.urlContexts.contains(where: {
+                $0.url.scheme == "siyuan" && $0.url.host == "shorthand"
+            })
         
-        if let shortcutItem = connectionOptions.shortcutItem,
-           shortcutItem.type == "com.b3log.siyuan.shorthand" {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                self?.presentShorthand()
+        guard isShorthand else {
+            // Normal launch: system loaded Main.storyboard, ViewController.viewDidLoad will start kernel
+            for context in connectionOptions.urlContexts {
+                if !(context.url.scheme == "siyuan" && context.url.host == "shorthand") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                        ViewController.syWebView.evaluateJavaScript("openFileByURL('" + context.url.absoluteString + "')")
+                    }
+                }
             }
+            return
         }
         
-        for context in connectionOptions.urlContexts{
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                ViewController.syWebView.evaluateJavaScript("openFileByURL('" + context.url.absoluteString + "')")
+        // Shorthand launch: replace root VC before ViewController.viewDidLoad fires
+        let vc = ShorthandViewController()
+        shorthandVC = vc
+        for context in connectionOptions.urlContexts {
+            if context.url.scheme == "siyuan" && context.url.host == "shorthand",
+               let text = context.url.query?.removingPercentEncoding {
+                vc.appendText(text)
             }
         }
+        window?.rootViewController = vc
     }
     
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
@@ -55,6 +68,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     
     private func presentShorthand(text: String? = nil) {
         guard let rootVC = window?.rootViewController else { return }
+        
+        if let shorthandRoot = rootVC as? ShorthandViewController {
+            if let t = text, !t.isEmpty {
+                shorthandRoot.appendText(t)
+            }
+            return
+        }
         
         if let existing = shorthandVC {
             if let t = text, !t.isEmpty {
@@ -138,18 +158,32 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         for entry in entries {
             let src = sharedDir + entry
             let dst = targetDir + entry
-            if fm.fileExists(atPath: dst) {
-                try? fm.removeItem(atPath: dst)
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: src, isDirectory: &isDir), isDir.boolValue {
+                try? fm.createDirectory(atPath: dst, withIntermediateDirectories: true, attributes: nil)
+                if let subEntries = try? fm.contentsOfDirectory(atPath: src) {
+                    for subEntry in subEntries {
+                        let subSrc = src + "/" + subEntry
+                        let subDst = dst + "/" + subEntry
+                        if fm.fileExists(atPath: subDst) {
+                            try? fm.removeItem(atPath: subDst)
+                        }
+                        try? fm.moveItem(atPath: subSrc, toPath: subDst)
+                    }
+                }
+                try? fm.removeItem(atPath: src)
+            } else {
+                if fm.fileExists(atPath: dst) {
+                    try? fm.removeItem(atPath: dst)
+                }
+                try? fm.moveItem(atPath: src, toPath: dst)
             }
-            try? fm.moveItem(atPath: src, toPath: dst)
         }
         try? fm.removeItem(atPath: sharedDir)
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
-        // Called as the scene transitions from the foreground to the background.
-        // Use this method to save data, release shared resources, and store enough scene-specific state information
-        // to restore the scene back to its current state.
+        guard !(window?.rootViewController is ShorthandViewController) else { return }
         ViewController.syWebView.evaluateJavaScript("lockscreenByMode();")
     }
 

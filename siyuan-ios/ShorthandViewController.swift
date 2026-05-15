@@ -33,6 +33,11 @@ class ShorthandViewController: UIViewController {
         setupUI()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        textView.becomeFirstResponder()
+    }
+
     private func setupUI() {
         // Title bar
         let titleBar = UIStackView(arrangedSubviews: [titleLabel, submitButton])
@@ -47,12 +52,13 @@ class ShorthandViewController: UIViewController {
         submitButton.setTitle(NSLocalizedString("Submit", comment: ""), for: .normal)
         submitButton.addTarget(self, action: #selector(onSubmit), for: .touchUpInside)
         submitButton.isEnabled = false
-        submitButton.backgroundColor = .systemBlue
         submitButton.setTitleColor(.white, for: .normal)
-        submitButton.setTitleColor(.lightGray, for: .disabled)
+        submitButton.setTitleColor(.white, for: .disabled)
         submitButton.titleLabel?.font = UIFont.systemFont(ofSize: 14)
         submitButton.layer.cornerRadius = 6
-        submitButton.contentEdgeInsets = UIEdgeInsets(top: 4, left: 12, bottom: 4, right: 12)
+        submitButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        submitButton.setContentHuggingPriority(.required, for: .horizontal)
+        updateSubmitButtonState()
 
         // Separator
         let separator = UIView()
@@ -75,10 +81,12 @@ class ShorthandViewController: UIViewController {
         view.addSubview(placeholderLabel)
 
         NSLayoutConstraint.activate([
-            titleBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            titleBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             titleBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            titleBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
-            titleBar.heightAnchor.constraint(equalToConstant: 48),
+            titleBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            titleBar.heightAnchor.constraint(equalToConstant: 56),
+
+            submitButton.heightAnchor.constraint(equalToConstant: 36),
 
             separator.topAnchor.constraint(equalTo: titleBar.bottomAnchor),
             separator.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -96,9 +104,18 @@ class ShorthandViewController: UIViewController {
         ])
     }
 
+    private func updateSubmitButtonState() {
+        if submitButton.isEnabled {
+            submitButton.backgroundColor = .systemBlue
+        } else {
+            submitButton.backgroundColor = .systemGray3
+        }
+    }
+
     func appendText(_ text: String) {
         textView.text += text
         submitButton.isEnabled = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        updateSubmitButtonState()
     }
 
     @objc private func onSubmit() {
@@ -123,12 +140,19 @@ class ShorthandViewController: UIViewController {
         textView.text = ""
         submitButton.isEnabled = false
         placeholderLabel.isHidden = false
+
+        if presentingViewController != nil {
+            dismiss(animated: true)
+        } else {
+            UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
+        }
     }
 }
 
 extension ShorthandViewController: UITextViewDelegate {
     func textViewDidChange(_ textView: UITextView) {
         submitButton.isEnabled = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        updateSubmitButtonState()
         placeholderLabel.isHidden = !textView.text.isEmpty
     }
 }
