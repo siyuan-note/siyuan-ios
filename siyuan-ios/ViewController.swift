@@ -463,12 +463,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
 
     guard let data = Iosk.MobileReadExportFile(uri) else {
-      print("saveExportFile read failed: file not found or empty")
+      Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
       return
     }
 
     if data.isEmpty {
-      print("saveExportFile data is empty")
+      Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
       return
     }
 
@@ -485,7 +485,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
       let fileSize = (try? fileManager.attributesOfItem(atPath: destURL.path)[.size] as? Int) ?? 0
       if fileSize == 0 {
-        print("saveExportFile file is empty")
+        Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
         try? fileManager.removeItem(at: destURL)
         return
       }
@@ -509,6 +509,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       }
     } catch {
       print("saveExportFile write failed: \(error.localizedDescription)")
+      Iosk.MobileShowMsg(Iosk.MobileLanguage(290), 5000)
     }
   }
 }
