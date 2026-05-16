@@ -453,18 +453,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   func saveExportFile(uri: String) {
-    var urlString = uri
-    if urlString.hasPrefix("/") {
-      urlString = "http://127.0.0.1:6806" + urlString
-    } else if urlString.hasPrefix("assets/") {
-      urlString = "http://127.0.0.1:6806/" + urlString
-    }
-
-    guard let url = URL(string: urlString) else {
-      return
-    }
-
-    var fileName = url.lastPathComponent
+    var fileName = (uri as NSString).lastPathComponent
     if let queryIdx = fileName.firstIndex(of: "?") {
       fileName = String(fileName[..<queryIdx])
     }
@@ -473,58 +462,54 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       fileName = "export"
     }
 
-    let task = URLSession.shared.downloadTask(with: url) { [weak self] (tempURL, response, error) in
-      guard let self = self else { return }
-      guard let tempURL = tempURL, error == nil else {
-        print("saveExportFile download failed: \(error?.localizedDescription ?? "unknown")")
-        return
-      }
-
-      if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
-        print("saveExportFile HTTP error: \(httpResponse.statusCode)")
-        return
-      }
-
-      let fileManager = FileManager.default
-      let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("export", isDirectory: true)
-      try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-      let destURL = cacheDir.appendingPathComponent(fileName)
-
-      try? fileManager.removeItem(at: destURL)
-
-      do {
-        try fileManager.moveItem(at: tempURL, to: destURL)
-
-        let fileSize = (try? fileManager.attributesOfItem(atPath: destURL.path)[.size] as? Int) ?? 0
-        if fileSize == 0 {
-          print("saveExportFile file is empty")
-          try? fileManager.removeItem(at: destURL)
-          return
-        }
-
-        DispatchQueue.main.async { [weak self] in
-          guard let self = self else { return }
-          let activityVC = UIActivityViewController(
-            activityItems: [destURL], applicationActivities: nil)
-
-          if UIDevice.current.userInterfaceIdiom == .pad {
-            activityVC.popoverPresentationController?.sourceView = self.view
-            activityVC.popoverPresentationController?.sourceRect = CGRect(
-              x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
-          }
-
-          activityVC.completionWithItemsHandler = { _, _, _, _ in
-            try? fileManager.removeItem(at: destURL)
-          }
-
-          self.present(activityVC, animated: true)
-        }
-      } catch {
-        print("saveExportFile move failed: \(error.localizedDescription)")
-      }
+    guard let data = Iosk.MobileReadExportFile(uri) else {
+      print("saveExportFile read failed: file not found or empty")
+      return
     }
-    task.resume()
+
+    if data.isEmpty {
+      print("saveExportFile data is empty")
+      return
+    }
+
+    let fileManager = FileManager.default
+    let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("export", isDirectory: true)
+    try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+    let destURL = cacheDir.appendingPathComponent(fileName)
+
+    try? fileManager.removeItem(at: destURL)
+
+    do {
+      try data.write(to: destURL)
+
+      let fileSize = (try? fileManager.attributesOfItem(atPath: destURL.path)[.size] as? Int) ?? 0
+      if fileSize == 0 {
+        print("saveExportFile file is empty")
+        try? fileManager.removeItem(at: destURL)
+        return
+      }
+
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { return }
+        let activityVC = UIActivityViewController(
+          activityItems: [destURL], applicationActivities: nil)
+
+        if UIDevice.current.userInterfaceIdiom == .pad {
+          activityVC.popoverPresentationController?.sourceView = self.view
+          activityVC.popoverPresentationController?.sourceRect = CGRect(
+            x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
+        }
+
+        activityVC.completionWithItemsHandler = { _, _, _, _ in
+          try? fileManager.removeItem(at: destURL)
+        }
+
+        self.present(activityVC, animated: true)
+      }
+    } catch {
+      print("saveExportFile write failed: \(error.localizedDescription)")
+    }
   }
 }
 
