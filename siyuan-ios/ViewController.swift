@@ -480,13 +480,28 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         return
       }
 
+      if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+        print("saveExportFile HTTP error: \(httpResponse.statusCode)")
+        return
+      }
+
       let fileManager = FileManager.default
-      let destURL = fileManager.temporaryDirectory.appendingPathComponent(fileName)
+      let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("export", isDirectory: true)
+      try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+      let destURL = cacheDir.appendingPathComponent(fileName)
 
       try? fileManager.removeItem(at: destURL)
 
       do {
         try fileManager.moveItem(at: tempURL, to: destURL)
+
+        let fileSize = (try? fileManager.attributesOfItem(atPath: destURL.path)[.size] as? Int) ?? 0
+        if fileSize == 0 {
+          print("saveExportFile file is empty")
+          try? fileManager.removeItem(at: destURL)
+          return
+        }
 
         DispatchQueue.main.async { [weak self] in
           guard let self = self else { return }
@@ -497,6 +512,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
             activityVC.popoverPresentationController?.sourceView = self.view
             activityVC.popoverPresentationController?.sourceRect = CGRect(
               x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
+          }
+
+          activityVC.completionWithItemsHandler = { _, _, _, _ in
+            try? fileManager.removeItem(at: destURL)
           }
 
           self.present(activityVC, animated: true)
