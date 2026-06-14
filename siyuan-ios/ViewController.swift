@@ -264,7 +264,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
     Iosk.MobileStartKernel(
       "ios", Bundle.main.resourcePath, urls[0].path, TimeZone.current.identifier, getIP(),
-      Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh_CN" : "en_US",
+      Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh-CN" : "en",
       UIDevice.current.systemVersion)
   }
 
@@ -462,12 +462,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       fileName = "export"
     }
 
-    guard let data = Iosk.MobileReadExportFile(uri) else {
+    guard let srcPath = Iosk.MobileGetExportFilePath(uri), !srcPath.isEmpty else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
       return
     }
 
-    if data.isEmpty {
+    guard let srcHandle = FileHandle(forReadingAtPath: srcPath) else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
       return
     }
@@ -480,36 +480,45 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
     try? fileManager.removeItem(at: destURL)
 
-    do {
-      try data.write(to: destURL)
-
-      let fileSize = (try? fileManager.attributesOfItem(atPath: destURL.path)[.size] as? Int) ?? 0
-      if fileSize == 0 {
-        Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
-        try? fileManager.removeItem(at: destURL)
-        return
-      }
-
-      DispatchQueue.main.async { [weak self] in
-        guard let self = self else { return }
-        let activityVC = UIActivityViewController(
-          activityItems: [destURL], applicationActivities: nil)
-
-        if UIDevice.current.userInterfaceIdiom == .pad {
-          activityVC.popoverPresentationController?.sourceView = self.view
-          activityVC.popoverPresentationController?.sourceRect = CGRect(
-            x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
-        }
-
-        activityVC.completionWithItemsHandler = { _, _, _, _ in
-          try? fileManager.removeItem(at: destURL)
-        }
-
-        self.present(activityVC, animated: true)
-      }
-    } catch {
-      print("saveExportFile write failed: \(error.localizedDescription)")
+    guard fileManager.createFile(atPath: destURL.path, contents: nil),
+          let dstHandle = FileHandle(forWritingAtPath: destURL.path) else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(290), 5000)
+      srcHandle.closeFile()
+      return
+    }
+
+    let chunkSize = 65536
+    while true {
+      let data = srcHandle.readData(ofLength: chunkSize)
+      if data.isEmpty { break }
+      dstHandle.write(data)
+    }
+    srcHandle.closeFile()
+    dstHandle.closeFile()
+
+    let fileSize = (try? fileManager.attributesOfItem(atPath: destURL.path)[.size] as? Int) ?? 0
+    if fileSize == 0 {
+      Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
+      try? fileManager.removeItem(at: destURL)
+      return
+    }
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      let activityVC = UIActivityViewController(
+        activityItems: [destURL], applicationActivities: nil)
+
+      if UIDevice.current.userInterfaceIdiom == .pad {
+        activityVC.popoverPresentationController?.sourceView = self.view
+        activityVC.popoverPresentationController?.sourceRect = CGRect(
+          x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
+      }
+
+      activityVC.completionWithItemsHandler = { _, _, _, _ in
+        try? fileManager.removeItem(at: destURL)
+      }
+
+      self.present(activityVC, animated: true)
     }
   }
 }
