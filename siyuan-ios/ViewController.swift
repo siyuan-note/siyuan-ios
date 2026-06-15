@@ -462,7 +462,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       fileName = "export"
     }
 
-    guard let srcPath = Iosk.MobileGetExportFilePath(uri), !srcPath.isEmpty else {
+    let srcPath = Iosk.MobileGetExportFilePath(uri)
+    guard !srcPath.isEmpty else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
       return
     }
