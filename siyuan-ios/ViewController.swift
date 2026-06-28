@@ -40,7 +40,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 {
 
   static let iapManager = IAPManager.shared
-  static let syWebView = WKWebView()
+  static let syWebView = TouchUpWebView()
   var printTitle = ""
   var printWebView: WKWebView?
   var keyboardShowed = false
@@ -618,5 +618,14 @@ extension WKWebView {
       noInputAccessoryClass.self, #selector(getter: InputAccessoryHackHelper.inputAccessoryView),
       method_getImplementation(originalMethod), method_getTypeEncoding(originalMethod))
     object_setClass(target, noInputAccessoryClass)
+  }
+}
+
+// WKWebView 会吞掉触摸事件，VC 层的 touchesEnded 不可靠，故子类化并在视图自身监听抬手
+// 手指抬起时通知前端，用于清除长按多选定时器（前端通过 window 上的 nativePhysicalTouchUp 事件接收）
+final class TouchUpWebView: WKWebView {
+  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+    evaluateJavaScript("window.dispatchEvent(new Event('nativePhysicalTouchUp'))")
+    super.touchesEnded(touches, with: event)
   }
 }
