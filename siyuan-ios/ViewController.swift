@@ -642,7 +642,15 @@ private final class TouchUpGestureRecognizer: UIGestureRecognizer {
     state = .ended
   }
 
-  // 不与其它手势（滚动、点击、长按）冲突
+  // 系统取消（如被其它手势抢断）也视为手势结束，对齐 Android ACTION_UP/ACTION_CANCEL 语义
+  override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+    super.touchesCancelled(touches, with: event)
+    state = .ended
+  }
+
+  // 不与其它手势（滚动、点击、长按）冲突，允许同时识别
   override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
   override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+  override func shouldRequireFailure(of otherGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+  override func shouldBeRequiredToFail(by otherGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 }
