@@ -20,6 +20,7 @@ import GameController
 import Iosk
 import PDFKit
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 import WebKit
 
 private enum ScriptMessageName: String {
@@ -40,7 +41,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 {
 
   static let iapManager = IAPManager.shared
-  static let syWebView = TouchUpWebView()
+  static let syWebView = WKWebView()
   var printTitle = ""
   var printWebView: WKWebView?
   var keyboardShowed = false
@@ -137,6 +138,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
           ViewController.syWebView.isInspectable = true
       }
     #endif
+    // 手指抬起时通知前端，用于清除长按多选定时器（前端通过 window 上的 nativePhysicalTouchUp 事件接收）
+    // WKWebView 内部用自身 gesture recognizer 路由触摸，会吞掉 touches*，故用独立手势识别器捕获
+    let touchUpGesture = TouchUpGestureRecognizer(target: self, action: #selector(handleTouchUp))
+    touchUpGesture.cancelsTouchesInView = false
+    ViewController.syWebView.addGestureRecognizer(touchUpGesture)
+
     view.addSubview(ViewController.syWebView)
   }
 
@@ -365,6 +372,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   @objc func protectedDataDidBecomeUnavailable(_ notification: NSNotification!) {
     ViewController.syWebView.evaluateJavaScript("window.lockscreenByMode && window.lockscreenByMode()")
+  }
+
+  @objc func handleTouchUp() {
+    ViewController.syWebView.evaluateJavaScript("window.dispatchEvent(new Event('nativePhysicalTouchUp'))")
   }
 
   private func printDynamicHTML(_ htmlContent: String) {
@@ -621,11 +632,20 @@ extension WKWebView {
   }
 }
 
-// WKWebView 会吞掉触摸事件，VC 层的 touchesEnded 不可靠，故子类化并在视图自身监听抬手
-// 手指抬起时通知前端，用于清除长按多选定时器（前端通过 window 上的 nativePhysicalTouchUp 事件接收）
-final class TouchUpWebView: WKWebView {
-  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-    evaluateJavaScript("window.dispatchEvent(new Event('nativePhysicalTouchUp'))")
-    super.touchesEnded(touches, with: event)
+// 仅用于在 WKWebView 上捕获手指抬起事件
+// WKWebView 会吞掉 touches*，自定义手势识别器在事件分发阶段被独立调用，可可靠捕获
+private final class TouchUpGestureRecognizer: UIGestureRecognizer {
+  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+    super.touchesBegan(touches, with: event)
+    state = .began
   }
+
+  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+    super.touchesEnded(touches, with: event)
+    state = .ended
+  }
+
+  // 不与其它手势（滚动、点击、长按）冲突
+  override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+  override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 }
