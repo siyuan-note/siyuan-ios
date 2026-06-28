@@ -635,11 +635,8 @@ extension WKWebView {
 // 仅用于在 WKWebView 上捕获手指抬起事件
 // WKWebView 会吞掉 touches*，自定义手势识别器在事件分发阶段被独立调用，可可靠捕获
 private final class TouchUpGestureRecognizer: UIGestureRecognizer {
-  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-    super.touchesBegan(touches, with: event)
-    state = .began
-  }
-
+  // 不在 touchesBegan 中置 .began：否则会变成持续型手势，移动时 state 推进到 .changed 反复触发 action
+  // 保持 .possible 直到抬手，由 touchesEnded 直接跳到 .ended，仅触发一次
   override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
     super.touchesEnded(touches, with: event)
     state = .ended
