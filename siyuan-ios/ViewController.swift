@@ -20,7 +20,6 @@ import GameController
 import Iosk
 import PDFKit
 import UIKit
-import UIKit.UIGestureRecognizerSubclass
 import WebKit
 
 private enum ScriptMessageName: String {
@@ -138,12 +137,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
           ViewController.syWebView.isInspectable = true
       }
     #endif
-    // 手指抬起时通知前端，用于清除长按多选定时器（前端通过 window 上的 nativePhysicalTouchUp 事件接收）
-    // WKWebView 内部用自身 gesture recognizer 路由触摸，会吞掉 touches*，故用独立手势识别器捕获
-    let touchUpGesture = TouchUpGestureRecognizer(target: self, action: #selector(handleTouchUp))
-    touchUpGesture.cancelsTouchesInView = false
-    ViewController.syWebView.addGestureRecognizer(touchUpGesture)
-
     view.addSubview(ViewController.syWebView)
   }
 
@@ -372,10 +365,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   @objc func protectedDataDidBecomeUnavailable(_ notification: NSNotification!) {
     ViewController.syWebView.evaluateJavaScript("window.lockscreenByMode && window.lockscreenByMode()")
-  }
-
-  @objc func handleTouchUp() {
-    ViewController.syWebView.evaluateJavaScript("window.dispatchEvent(new Event('nativePhysicalTouchUp'))")
   }
 
   private func printDynamicHTML(_ htmlContent: String) {
@@ -630,27 +619,4 @@ extension WKWebView {
       method_getImplementation(originalMethod), method_getTypeEncoding(originalMethod))
     object_setClass(target, noInputAccessoryClass)
   }
-}
-
-// 仅用于在 WKWebView 上捕获手指抬起事件
-// WKWebView 会吞掉 touches*，自定义手势识别器在事件分发阶段被独立调用，可可靠捕获
-private final class TouchUpGestureRecognizer: UIGestureRecognizer {
-  // 不在 touchesBegan 中置 .began：否则会变成持续型手势，移动时 state 推进到 .changed 反复触发 action
-  // 保持 .possible 直到抬手，由 touchesEnded 直接跳到 .ended，仅触发一次
-  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-    super.touchesEnded(touches, with: event)
-    state = .ended
-  }
-
-  // 系统取消（如被其它手势抢断）也视为手势结束，对齐 Android ACTION_UP/ACTION_CANCEL 语义
-  override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-    super.touchesCancelled(touches, with: event)
-    state = .ended
-  }
-
-  // 不与其它手势（滚动、点击、长按）冲突，允许同时识别
-  override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
-  override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
-  override func shouldRequireFailure(of otherGestureRecognizer: UIGestureRecognizer) -> Bool { false }
-  override func shouldBeRequiredToFail(by otherGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 }
