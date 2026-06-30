@@ -11,7 +11,6 @@
 		2605291F443EB855AA534C4D /* ShorthandViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */; };
 		261A2E192D1A5DE100451540 /* libresolv.9.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 261A2E182D1A5DC900451540 /* libresolv.9.tbd */; };
 		2646A9372C3D297B0014E1AC /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 2646A9352C3D297B0014E1AC /* InfoPlist.strings */; };
-		A1B2C3D4E5F6111100010001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6111100010004 /* Localizable.strings */; };
 		2674E0772FB0BFF5007BADF5 /* ShorthandShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2674E06D2FB0BFF5007BADF5 /* ShorthandShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2675C37B2D89642200421174 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2675C37A2D89642200421174 /* StoreKit.framework */; };
 		2675C37D2D8964E300421174 /* IAPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2675C37C2D8964DB00421174 /* IAPManager.swift */; };
@@ -23,6 +22,7 @@
 		268CE5AE275A68B700DFCFF8 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 268CE5AC275A68B700DFCFF8 /* LaunchScreen.storyboard */; };
 		268CE5B6275A68F300DFCFF8 /* app in Resources */ = {isa = PBXBuildFile; fileRef = 268CE5B5275A68F300DFCFF8 /* app */; };
 		26D64CCE28430F4000295E70 /* iosk.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 26D64CCD28430F4000295E70 /* iosk.xcframework */; };
+		A1B2C3D4E5F6111100010001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6111100010004 /* Localizable.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,8 +56,6 @@
 		2646A9382C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Main.strings"; sourceTree = "<group>"; };
 		2646A9392C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/LaunchScreen.strings"; sourceTree = "<group>"; };
 		2646A93A2C3D29D00014E1AC /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
-		A1B2C3D4E5F6111100010002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
-		A1B2C3D4E5F6111100010003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		2674E06D2FB0BFF5007BADF5 /* ShorthandShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShorthandShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2675C37A2D89642200421174 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		2675C37C2D8964DB00421174 /* IAPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IAPManager.swift; sourceTree = "<group>"; };
@@ -72,6 +70,8 @@
 		268CE5B5275A68F300DFCFF8 /* app */ = {isa = PBXFileReference; lastKnownFileType = folder; path = app; sourceTree = "<group>"; };
 		26C9D7222FB0C22A00635896 /* siyuan-ios.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "siyuan-ios.entitlements"; sourceTree = "<group>"; };
 		26D64CCD28430F4000295E70 /* iosk.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = iosk.xcframework; path = ../siyuan/kernel/ios/iosk.xcframework; sourceTree = "<group>"; };
+		A1B2C3D4E5F6111100010002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		A1B2C3D4E5F6111100010003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -306,15 +306,6 @@
 			name = InfoPlist.strings;
 			sourceTree = "<group>";
 		};
-		A1B2C3D4E5F6111100010004 /* Localizable.strings */ = {
-			isa = PBXVariantGroup;
-			children = (
-				A1B2C3D4E5F6111100010002 /* en */,
-				A1B2C3D4E5F6111100010003 /* zh-Hans */,
-			);
-			name = Localizable.strings;
-			sourceTree = "<group>";
-		};
 		268CE5A7275A68B400DFCFF8 /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -331,6 +322,15 @@
 				2646A9392C3D29D00014E1AC /* zh-Hans */,
 			);
 			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6111100010004 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A1B2C3D4E5F6111100010002 /* en */,
+				A1B2C3D4E5F6111100010003 /* zh-Hans */,
+			);
+			name = Localizable.strings;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
@@ -393,9 +393,9 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				OTHER_LDFLAGS = "-lresolv";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = NO;
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "-lresolv";
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -558,7 +558,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.6.5;
+				MARKETING_VERSION = 3.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -599,7 +599,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.6.5;
+				MARKETING_VERSION = 3.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

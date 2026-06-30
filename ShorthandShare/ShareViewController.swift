@@ -29,7 +29,7 @@ class ShareViewController: UIViewController, UITextViewDelegate {
         super.viewDidLoad()
         title = NSLocalizedString("shorthand_label", comment: "")
         view.backgroundColor = .systemBackground
-        
+
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .cancel,
             target: self,
@@ -173,10 +173,10 @@ class ShareViewController: UIViewController, UITextViewDelegate {
 
     private func shorthandsDir() -> String {
         let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.org.b3log.siyuan")
+            forSecurityApplicationGroupIdentifier: "group.com.ld246.siyuan")
         return (containerURL?.path ?? NSTemporaryDirectory()) + "/home/.config/siyuan/shortcuts/shorthands/"
     }
-    
+
     func textViewDidChange(_ textView: UITextView) {
         placeholderLabel.isHidden = !textView.text.isEmpty
     }

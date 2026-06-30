@@ -151,7 +151,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   private func moveSharedShorthands() {
     guard
       let containerURL = FileManager.default.containerURL(
-        forSecurityApplicationGroupIdentifier: "group.org.b3log.siyuan")
+        forSecurityApplicationGroupIdentifier: "group.com.ld246.siyuan")
     else {
       return
     }
