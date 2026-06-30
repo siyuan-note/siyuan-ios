@@ -134,7 +134,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     ViewController.syWebView.load(URLRequest(url: url))
     #if DEBUG
       if #available(iOS 16.4, *) {
-          ViewController.syWebView.isInspectable = true
+        ViewController.syWebView.isInspectable = true
       }
     #endif
     view.addSubview(ViewController.syWebView)
@@ -364,7 +364,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   @objc func protectedDataDidBecomeUnavailable(_ notification: NSNotification!) {
-    ViewController.syWebView.evaluateJavaScript("window.lockscreenByMode && window.lockscreenByMode()")
+    ViewController.syWebView.evaluateJavaScript(
+      "window.lockscreenByMode && window.lockscreenByMode()")
   }
 
   private func printDynamicHTML(_ htmlContent: String) {
@@ -482,7 +483,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     try? fileManager.removeItem(at: destURL)
 
     guard fileManager.createFile(atPath: destURL.path, contents: nil),
-          let dstHandle = FileHandle(forWritingAtPath: destURL.path) else {
+      let dstHandle = FileHandle(forWritingAtPath: destURL.path)
+    else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(290), 5000)
       srcHandle.closeFile()
       return
