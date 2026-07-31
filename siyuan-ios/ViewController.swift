@@ -71,6 +71,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    cleanupStaleExportCache()
 
     guard
       let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=" + getAppVersion())
@@ -615,74 +616,90 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
   }
 
-  private func saveExportFileInBackground(uri: String) {
-    var fileName = (uri as NSString).lastPathComponent
-    if let queryIdx = fileName.firstIndex(of: "?") {
-      fileName = String(fileName[..<queryIdx])
-    }
-    fileName = fileName.removingPercentEncoding ?? fileName
-    if fileName.isEmpty {
-      fileName = "export"
-    }
+  private func exportCacheRoot() -> URL {
+    return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("export", isDirectory: true)
+  }
 
+  private func cleanupStaleExportCache() {
+    let fileManager = FileManager.default
+    let cacheRoot = exportCacheRoot()
+    try? fileManager.removeItem(at: cacheRoot)
+    try? fileManager.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
+  }
+
+  private func saveExportFileInBackground(uri: String) {
     let leaseJSON = Iosk.MobileAcquireExportFile(uri)
     guard !leaseJSON.isEmpty,
       let leaseData = leaseJSON.data(using: .utf8),
       let lease = try? JSONSerialization.jsonObject(with: leaseData) as? [String: Any],
       let leaseID = lease["leaseID"] as? String,
-      let srcPath = lease["path"] as? String,
       !leaseID.isEmpty,
-      !srcPath.isEmpty
+      leaseID.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil
     else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
       return
     }
+    var releaseLease = true
+    var cleanupDir: URL?
     defer {
-      Iosk.MobileReleaseExportFile(leaseID)
+      if releaseLease {
+        if let cleanupDir = cleanupDir {
+          try? FileManager.default.removeItem(at: cleanupDir)
+        }
+        Iosk.MobileReleaseExportFile(leaseID)
+      }
     }
-    if let leasedName = lease["name"] as? String, !leasedName.isEmpty {
-      fileName = leasedName
-    }
-
-    guard let srcHandle = FileHandle(forReadingAtPath: srcPath) else {
+    guard let srcPath = lease["path"] as? String, !srcPath.isEmpty,
+      let expectedSize = (lease["size"] as? NSNumber)?.int64Value
+    else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
       return
     }
 
     let fileManager = FileManager.default
-    let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("export", isDirectory: true)
-    try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-    let destURL = cacheDir.appendingPathComponent(fileName)
-
-    try? fileManager.removeItem(at: destURL)
-
-    guard fileManager.createFile(atPath: destURL.path, contents: nil),
-      let dstHandle = FileHandle(forWritingAtPath: destURL.path)
-    else {
+    let rawName = (lease["name"] as? String) ?? "export"
+    var fileName = (rawName as NSString).lastPathComponent
+    if fileName.isEmpty || fileName == "." || fileName == ".." {
+      fileName = "export"
+    }
+    let cacheDir = exportCacheRoot().appendingPathComponent(leaseID, isDirectory: true)
+    cleanupDir = cacheDir
+    let destURL = cacheDir.appendingPathComponent(fileName, isDirectory: false)
+    do {
+      try fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+      try fileManager.setAttributes(
+        [.protectionKey: FileProtectionType.complete], ofItemAtPath: cacheDir.path)
+      try fileManager.copyItem(at: URL(fileURLWithPath: srcPath), to: destURL)
+      try fileManager.setAttributes(
+        [.protectionKey: FileProtectionType.complete], ofItemAtPath: destURL.path)
+      let sourceAttributes = try fileManager.attributesOfItem(atPath: srcPath)
+      let destinationAttributes = try fileManager.attributesOfItem(atPath: destURL.path)
+      let sourceSize = (sourceAttributes[.size] as? NSNumber)?.int64Value
+      let destinationSize = (destinationAttributes[.size] as? NSNumber)?.int64Value
+      guard sourceSize == expectedSize, destinationSize == expectedSize else {
+        throw CocoaError(.fileReadCorruptFile)
+      }
+    } catch {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(290), 5000)
-      srcHandle.closeFile()
       return
     }
 
-    let chunkSize = 65536
-    while true {
-      let data = srcHandle.readData(ofLength: chunkSize)
-      if data.isEmpty { break }
-      dstHandle.write(data)
-    }
-    srcHandle.closeFile()
-    dstHandle.closeFile()
-
-    let fileSize = (try? fileManager.attributesOfItem(atPath: destURL.path)[.size] as? Int) ?? 0
-    if fileSize == 0 {
-      Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
-      try? fileManager.removeItem(at: destURL)
-      return
-    }
-
+    releaseLease = false
     DispatchQueue.main.async { [weak self] in
-      guard let self = self else { return }
+      let cleanup = {
+        try? fileManager.removeItem(at: cacheDir)
+        Iosk.MobileReleaseExportFile(leaseID)
+      }
+      guard let self = self else {
+        cleanup()
+        return
+      }
+      guard self.presentedViewController == nil else {
+        cleanup()
+        Iosk.MobileShowMsg(Iosk.MobileLanguage(290), 5000)
+        return
+      }
       let activityVC = UIActivityViewController(
         activityItems: [destURL], applicationActivities: nil)
 
@@ -693,7 +710,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       }
 
       activityVC.completionWithItemsHandler = { _, _, _, _ in
-        try? fileManager.removeItem(at: destURL)
+        cleanup()
       }
 
       self.present(activityVC, animated: true)
