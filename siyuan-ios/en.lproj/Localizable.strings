@@ -3,3 +3,5 @@
 "Submit" = "Submit";
 "Cancel" = "Cancel";
 "Paste" = "Paste";
+"shorthand_intent_description" = "Open SiYuan shorthand to capture a quick note";
+"shorthand_intent_content_param" = "Content";

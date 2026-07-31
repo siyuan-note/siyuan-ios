@@ -23,6 +23,10 @@
 		268CE5B6275A68F300DFCFF8 /* app in Resources */ = {isa = PBXBuildFile; fileRef = 268CE5B5275A68F300DFCFF8 /* app */; };
 		26D64CCE28430F4000295E70 /* iosk.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 26D64CCD28430F4000295E70 /* iosk.xcframework */; };
 		A1B2C3D4E5F6111100010001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6111100010004 /* Localizable.strings */; };
+		A1B2C3D5E5F6222200020001 /* AppearanceResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020002 /* AppearanceResolver.swift */; };
+		A1B2C3D5E5F6222200020101 /* ShorthandLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020102 /* ShorthandLauncher.swift */; };
+		A1B2C3D5E5F6222200020201 /* ShorthandAppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020202 /* ShorthandAppShortcuts.swift */; };
+		A1B2C3D5E5F6222200020301 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020302 /* AppIntents.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +76,10 @@
 		26D64CCD28430F4000295E70 /* iosk.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = iosk.xcframework; path = ../siyuan/kernel/ios/iosk.xcframework; sourceTree = "<group>"; };
 		A1B2C3D4E5F6111100010002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A1B2C3D4E5F6111100010003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A1B2C3D5E5F6222200020002 /* AppearanceResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceResolver.swift; sourceTree = "<group>"; };
+		A1B2C3D5E5F6222200020102 /* ShorthandLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandLauncher.swift; sourceTree = "<group>"; };
+		A1B2C3D5E5F6222200020202 /* ShorthandAppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandAppShortcuts.swift; sourceTree = "<group>"; };
+		A1B2C3D5E5F6222200020302 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
 		B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -102,6 +110,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2675C37B2D89642200421174 /* StoreKit.framework in Frameworks */,
+				A1B2C3D5E5F6222200020301 /* AppIntents.framework in Frameworks */,
 				261A2E192D1A5DE100451540 /* libresolv.9.tbd in Frameworks */,
 				26D64CCE28430F4000295E70 /* iosk.xcframework in Frameworks */,
 			);
@@ -139,6 +148,9 @@
 				268CE5A3275A68B400DFCFF8 /* SceneDelegate.swift */,
 				268CE5A5275A68B400DFCFF8 /* ViewController.swift */,
 				B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */,
+				A1B2C3D5E5F6222200020002 /* AppearanceResolver.swift */,
+				A1B2C3D5E5F6222200020102 /* ShorthandLauncher.swift */,
+				A1B2C3D5E5F6222200020202 /* ShorthandAppShortcuts.swift */,
 				268CE5A7275A68B400DFCFF8 /* Main.storyboard */,
 				268CE5AA275A68B700DFCFF8 /* Assets.xcassets */,
 				004F1B3B2F2FF46D006B27B5 /* logo.icon */,
@@ -154,6 +166,7 @@
 			isa = PBXGroup;
 			children = (
 				2675C37A2D89642200421174 /* StoreKit.framework */,
+				A1B2C3D5E5F6222200020302 /* AppIntents.framework */,
 				261A2E182D1A5DC900451540 /* libresolv.9.tbd */,
 				26D64CCD28430F4000295E70 /* iosk.xcframework */,
 			);
@@ -281,6 +294,9 @@
 				2675C37D2D8964E300421174 /* IAPManager.swift in Sources */,
 				268CE5A6275A68B400DFCFF8 /* ViewController.swift in Sources */,
 				2605291F443EB855AA534C4D /* ShorthandViewController.swift in Sources */,
+				A1B2C3D5E5F6222200020001 /* AppearanceResolver.swift in Sources */,
+				A1B2C3D5E5F6222200020101 /* ShorthandLauncher.swift in Sources */,
+				A1B2C3D5E5F6222200020201 /* ShorthandAppShortcuts.swift in Sources */,
 				268CE5A2275A68B400DFCFF8 /* AppDelegate.swift in Sources */,
 				268CE5A4275A68B400DFCFF8 /* SceneDelegate.swift in Sources */,
 			);
@@ -558,7 +574,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.7.0;
+				MARKETING_VERSION = 3.7.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -599,7 +615,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.7.0;
+				MARKETING_VERSION = 3.7.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

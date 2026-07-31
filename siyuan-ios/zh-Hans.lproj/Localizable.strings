@@ -2,3 +2,5 @@
 "shorthand_label" = "闪念速记";
 "Submit" = "提交";
 "Cancel" = "取消";
+"shorthand_intent_description" = "打开思源笔记闪念速记，记录一条速记";
+"shorthand_intent_content_param" = "内容";

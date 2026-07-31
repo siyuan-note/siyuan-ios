@@ -22,43 +22,64 @@ import UniformTypeIdentifiers
 
 class ShorthandViewController: UIViewController {
 
+  /// 作为 root VC 关闭（提交或取消）时发出，由 SceneDelegate 接管挂起应用，
+  /// 下次激活由 sceneDidBecomeActive 兜底恢复主界面。
+  static let didSubmitAsRootNotification = Notification.Name("ShorthandDidSubmitAsRoot")
+
   private let textView = ShorthandTextView()
   private let titleLabel = UILabel()
   private let submitButton = UIButton(type: .system)
+  private let cancelButton = UIButton(type: .system)
   private let placeholderLabel = UILabel()
 
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .systemBackground
+    applyAppearance()
     setupUI()
   }
 
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
+    // 无内容时确保提交按钮置灰，覆盖冷启动 root VC / present / URL scheme 等各入口
+    refreshSubmitButton()
     textView.becomeFirstResponder()
   }
 
+  /// 读取内核持久化的 appearance 配置，使界面与思源主题保持一致。
+  private func applyAppearance() {
+    view.overrideUserInterfaceStyle = AppearanceResolver.userInterfaceStyle()
+  }
+
   private func setupUI() {
-    // Title bar
-    let titleBar = UIStackView(arrangedSubviews: [titleLabel, submitButton])
+    // Title bar：[取消] [标题(居中)] [提交]
+    let titleBar = UIStackView(arrangedSubviews: [cancelButton, titleLabel, submitButton])
     titleBar.axis = .horizontal
     titleBar.alignment = .center
     titleBar.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(titleBar)
 
+    cancelButton.setTitle(NSLocalizedString("Cancel", comment: ""), for: .normal)
+    cancelButton.addTarget(self, action: #selector(onCancel), for: .touchUpInside)
+    cancelButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)
+    cancelButton.setContentHuggingPriority(.required, for: .horizontal)
+    cancelButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+
     titleLabel.text = NSLocalizedString("shorthand_label", comment: "")
     titleLabel.font = UIFont.boldSystemFont(ofSize: 18)
+    titleLabel.textAlignment = .center
+    // 让标题在取消/提交按钮之间居中
+    titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
     submitButton.setTitle(NSLocalizedString("Submit", comment: ""), for: .normal)
     submitButton.addTarget(self, action: #selector(onSubmit), for: .touchUpInside)
-    submitButton.isEnabled = false
     submitButton.setTitleColor(.white, for: .normal)
-    submitButton.setTitleColor(.white, for: .disabled)
+    submitButton.setTitleColor(.lightText, for: .disabled)
     submitButton.titleLabel?.font = UIFont.systemFont(ofSize: 14)
     submitButton.layer.cornerRadius = 6
     submitButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
     submitButton.setContentHuggingPriority(.required, for: .horizontal)
-    updateSubmitButtonState()
+    refreshSubmitButton()
 
     // Separator
     let separator = UIView()
@@ -105,18 +126,17 @@ class ShorthandViewController: UIViewController {
     ])
   }
 
-  private func updateSubmitButtonState() {
-    if submitButton.isEnabled {
-      submitButton.backgroundColor = .systemBlue
-    } else {
-      submitButton.backgroundColor = .systemGray3
-    }
+  /// 根据当前文本是否有非空内容，统一刷新提交按钮的可用态、样式与占位提示。
+  private func refreshSubmitButton() {
+    let hasContent = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    submitButton.isEnabled = hasContent
+    submitButton.backgroundColor = hasContent ? .systemBlue : .systemGray3
+    placeholderLabel.isHidden = !textView.text.isEmpty
   }
 
   func appendText(_ text: String) {
     textView.text += text
-    submitButton.isEnabled = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    updateSubmitButtonState()
+    refreshSubmitButton()
   }
 
   @objc private func onSubmit() {
@@ -140,22 +160,32 @@ class ShorthandViewController: UIViewController {
     }
 
     textView.text = ""
-    submitButton.isEnabled = false
     placeholderLabel.isHidden = false
+    refreshSubmitButton()
 
+    exitShorthand()
+  }
+
+  /// 取消：不保存，关闭闪念。
+  /// present 场景直接 dismiss 回到主界面；root VC（冷启动）场景挂起应用，
+  /// 下次激活由 sceneDidBecomeActive 兜底恢复主界面。
+  @objc private func onCancel() {
+    exitShorthand()
+  }
+
+  /// 关闭闪念界面：present 出来的则 dismiss，作为 root 的则交由 SceneDelegate 挂起并恢复主界面。
+  private func exitShorthand() {
     if presentingViewController != nil {
       dismiss(animated: true)
     } else {
-      UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
+      NotificationCenter.default.post(name: Self.didSubmitAsRootNotification, object: nil)
     }
   }
 }
 
 extension ShorthandViewController: UITextViewDelegate {
   func textViewDidChange(_ textView: UITextView) {
-    submitButton.isEnabled = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    updateSubmitButtonState()
-    placeholderLabel.isHidden = !textView.text.isEmpty
+    refreshSubmitButton()
   }
 }
 

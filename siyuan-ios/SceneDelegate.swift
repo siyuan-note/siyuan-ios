@@ -22,6 +22,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
   var window: UIWindow?
   private var shorthandVC: ShorthandViewController?
+  /// 闪念冷启动（root VC）后置位：豁免随后的 sceneDidBecomeActive 恢复主界面兜底，
+  /// 让用户这次确实停留在闪念。仅在 scene(_:willConnectTo:) 的闪念冷启动分支置位。
+  private var pendingShorthandShortcut = false
 
   func scene(
     _ scene: UIScene, willConnectTo session: UISceneSession,
@@ -57,6 +60,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       }
     }
     window?.rootViewController = vc
+    // 标记本次激活由闪念冷启动触发，豁免 sceneDidBecomeActive 的恢复兜底
+    pendingShorthandShortcut = true
+    // root VC 场景提交后挂起应用，root 恢复交给 sceneDidBecomeActive 兜底
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(handleShorthandSubmitAsRoot),
+      name: ShorthandViewController.didSubmitAsRootNotification, object: nil)
   }
 
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
@@ -87,6 +96,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         existing.appendText(t)
       }
       if existing.presentingViewController == nil && rootVC.presentedViewController != existing {
+        existing.modalPresentationStyle = .fullScreen
         rootVC.present(existing, animated: true)
       }
       return
@@ -99,6 +109,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       vc.appendText(t)
     }
 
+    vc.modalPresentationStyle = .fullScreen
     rootVC.present(vc, animated: true)
 
     // Donate shortcut for Siri/Shortcuts
@@ -116,11 +127,42 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // This occurs shortly after the scene enters the background, or when its session is discarded.
     // Release any resources associated with this scene that can be re-created the next time the scene connects.
     // The scene may re-connect later, as its session was not necessarily discarded (see `application:didDiscardSceneSessions` instead).
+    NotificationCenter.default.removeObserver(
+      self, name: ShorthandViewController.didSubmitAsRootNotification, object: nil)
+  }
+
+  /// 闪念作为 root VC 提交后：仅挂起应用。
+  /// root 恢复交给 sceneDidBecomeActive 在下次激活时安全完成，避免此处同步拉起内核与挂起竞争。
+  @objc private func handleShorthandSubmitAsRoot() {
+    UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
+  }
+
+  private func restoreMainWindow() {
+    guard window?.rootViewController is ShorthandViewController else { return }
+    guard let mainVC = UIStoryboard(name: "Main", bundle: nil).instantiateInitialViewController()
+    else {
+      return
+    }
+    window?.rootViewController = mainVC
+    shorthandVC = nil
   }
 
   func sceneDidBecomeActive(_ scene: UIScene) {
-    // Called when the scene has moved from an inactive state to an active state.
-    // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
+    // App Intent（iOS 16+ 快捷指令/Siri，见 ShorthandAppShortcuts）入队的闪念请求：
+    if let text = ShorthandLauncher.consume() {
+      presentShorthand(text: text.isEmpty ? nil : text)
+      return
+    }
+    if pendingShorthandShortcut {
+      // 本次激活由闪念快捷方式触发，用户确实要进闪念，跳过恢复
+      pendingShorthandShortcut = false
+      return
+    }
+    // 兜底：点 App 图标等非闪念入口激活时，若 root 仍是闪念则恢复主界面。
+    // 与 Android（BootActivity→MainActivity）一致：launcher 永远回到主界面。
+    if window?.rootViewController is ShorthandViewController {
+      restoreMainWindow()
+    }
   }
 
   func sceneWillResignActive(_ scene: UIScene) {

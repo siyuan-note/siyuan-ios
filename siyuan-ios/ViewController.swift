@@ -33,6 +33,7 @@ private enum ScriptMessageName: String {
   case exit
   case sendNotification
   case cancelNotification
+  case vibrate
 }
 
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate,
@@ -44,6 +45,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   var printTitle = ""
   var printWebView: WKWebView?
   var keyboardShowed = false
+  var keyboardEndFrame: CGRect?
+  var isOrientationTransitioning = false
   var isDarkStyle = false
 
   required init(coder: NSCoder) {
@@ -74,6 +77,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     else {
       return
     }
+
+    // 启动/加载阶段 webview 显示的 boot/index.html 与 #loading 蒙层背景恒为深色 #1e1e1e，
+    // 故顶/底条初始也用同色与之衔接；待 webview 完全启动、changeStatusBar 回调到达后
+    // 再由其按思源主题精修为精确主题色与状态栏样式。
+    view.backgroundColor = UIColor(
+      red: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1)
 
     initKernel()
 
@@ -106,16 +115,34 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, name: ScriptMessageName.sendNotification.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
       self, name: ScriptMessageName.cancelNotification.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.vibrate.rawValue)
 
     // open url
     ViewController.syWebView.navigationDelegate = self
 
     // show keyboard
     ViewController.syWebView.scrollView.isScrollEnabled = false
+    if #available(iOS 26.0, *) {
+      ViewController.syWebView.scrollView.contentInsetAdjustmentBehavior = .never
+    }
     ViewController.syWebView.scrollView.delegate = self
+    // boot 页与 index 的 #loading 蒙层背景恒为深色 #1e1e1e，故 webview 及其滚动视图底色
+    // 也固定为深色，避免 HTML/CSS 渲染前露出默认白底。webview 内容（body 背景不透明）会
+    // 完全覆盖此底色；顶/底条由 changeStatusBar 回调按主题精修。
+    ViewController.syWebView.isOpaque = false
+    ViewController.syWebView.backgroundColor = UIColor(
+      red: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1)
+    ViewController.syWebView.scrollView.backgroundColor = UIColor(
+      red: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1)
     NotificationCenter.default.addObserver(
       self, selector: #selector(keyboardWillChange),
       name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+    if #available(iOS 26.0, *) {
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(keyboardWillHide),
+        name: UIResponder.keyboardWillHideNotification, object: nil)
+    }
     NotificationCenter.default.addObserver(
       self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification,
       object: nil)
@@ -142,10 +169,31 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    if ViewController.syWebView.frame.width != view.safeAreaLayoutGuide.layoutFrame.width
+    if #available(iOS 26.0, *) {
+      updateWebViewFrame()
+    } else if ViewController.syWebView.frame.width != view.safeAreaLayoutGuide.layoutFrame.width
       || !keyboardShowed
     {
       ViewController.syWebView.frame = view.safeAreaLayoutGuide.layoutFrame
+    }
+  }
+
+  override func viewWillTransition(
+    to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator
+  ) {
+    if #available(iOS 26.0, *) {
+      isOrientationTransitioning = true
+      keyboardShowed = false
+      keyboardEndFrame = nil
+      updateWebViewFrame()
+    }
+    super.viewWillTransition(to: size, with: coordinator)
+    if #available(iOS 26.0, *) {
+      coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+        self?.isOrientationTransitioning = false
+        self?.view.layoutIfNeeded()
+        self?.updateWebViewFrame()
+      }
     }
   }
 
@@ -159,6 +207,15 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   override var preferredStatusBarStyle: UIStatusBarStyle {
     return isDarkStyle ? .lightContent : .darkContent
+  }
+
+  func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    guard #available(iOS 26.0, *), scrollView === ViewController.syWebView.scrollView,
+      scrollView.contentOffset != .zero
+    else {
+      return
+    }
+    scrollView.setContentOffset(.zero, animated: false)
   }
 
   func UIColorFromRGB(_ rgbValue: Int) -> UIColor! {
@@ -224,6 +281,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       }
     case .cancelNotification:
       cancelNotification(id: message.body as! Int)
+    case .vibrate:
+      UIImpactFeedbackGenerator(style: .light).impactOccurred()
     default:
       return
     }
@@ -309,6 +368,49 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   @objc func keyboardWillChange(notification: NSNotification) {
+    // Shorthand 作为 modal 弹出时，其键盘不应压缩宿主 webview；否则关闭 modal 后
+    // 若键盘隐藏事件未正常回调，webview 高度无法恢复，导致应用整体上移。
+    if presentedViewController is ShorthandViewController {
+      keyboardShowed = false
+      if #available(iOS 26.0, *) {
+        keyboardEndFrame = nil
+        updateWebViewFrame()
+      }
+      return
+    }
+    if #available(iOS 26.0, *) {
+      if GCKeyboard.coalesced != nil {
+        keyboardShowed = false
+        keyboardEndFrame = nil
+        updateWebViewFrame()
+      } else {
+        guard
+          let endFrame =
+            (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?
+            .cgRectValue,
+          !isOrientationTransitioning,
+          abs(endFrame.width - view.bounds.width) < 1
+        else { return }
+        let keyboardFrame = view.convert(endFrame, from: nil)
+        let intersection = view.bounds.intersection(keyboardFrame)
+        if intersection.isNull || intersection.height <= 0
+          || intersection.maxY < view.bounds.maxY - 1
+        {
+          keyboardShowed = false
+          keyboardEndFrame = nil
+          updateWebViewFrame()
+          ViewController.syWebView.evaluateJavaScript("hideKeyboardToolbar()")
+          return
+        }
+        keyboardShowed = true
+        keyboardEndFrame = endFrame
+        DispatchQueue.main.async { [weak self] in
+          self?.view.layoutIfNeeded()
+          self?.updateWebViewFrame()
+        }
+      }
+      return
+    }
     keyboardShowed = true
     if GCKeyboard.coalesced != nil {
       if ViewController.syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
@@ -335,7 +437,61 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
   }
 
+  @available(iOS 26.0, *)
+  @objc func keyboardWillHide(notification: NSNotification) {
+    keyboardShowed = false
+    keyboardEndFrame = nil
+    updateWebViewFrame()
+    ViewController.syWebView.evaluateJavaScript(
+      "document.activeElement && document.activeElement.blur();hideKeyboardToolbar()")
+  }
+
+  private func updateWebViewFrame() {
+    guard #available(iOS 26.0, *) else { return }
+    let webViewFrame = view.safeAreaLayoutGuide.layoutFrame
+    if ViewController.syWebView.frame != webViewFrame {
+      ViewController.syWebView.frame = webViewFrame
+    }
+    var bottomInset: CGFloat = 0
+    if keyboardShowed && !isOrientationTransitioning, GCKeyboard.coalesced == nil,
+      let keyboardEndFrame
+    {
+      // WebView 保持完整安全区，通过遮挡 inset 调整网页布局，避免键盘与 frame 重复缩放。
+      let keyboardFrame = view.convert(keyboardEndFrame, from: nil)
+      let intersection = view.bounds.intersection(keyboardFrame)
+      if !intersection.isNull && intersection.maxY >= view.bounds.maxY - 1 {
+        bottomInset = min(webViewFrame.height, max(0, webViewFrame.maxY - keyboardFrame.minY))
+      }
+    }
+    let obscuredInsets = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
+    if ViewController.syWebView.obscuredContentInsets != obscuredInsets {
+      ViewController.syWebView.obscuredContentInsets = obscuredInsets
+    }
+  }
+
   @objc func keyboardWillShow(notification: NSNotification) {
+    // Shorthand modal 期间不向宿主 webview 注入键盘工具栏高度
+    if presentedViewController is ShorthandViewController {
+      return
+    }
+    if #available(iOS 26.0, *) {
+      if let keyboardFrame =
+        (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue,
+        !isOrientationTransitioning,
+        abs(keyboardFrame.width - view.bounds.width) < 1
+      {
+        keyboardShowed = true
+        keyboardEndFrame = keyboardFrame
+        ViewController.syWebView.evaluateJavaScript(
+          "showKeyboardToolbar(" + (keyboardFrame.height - view.safeAreaInsets.bottom).description
+            + ")")
+      }
+      DispatchQueue.main.async { [weak self] in
+        self?.view.layoutIfNeeded()
+        self?.updateWebViewFrame()
+      }
+      return
+    }
     if let keyboardSize =
       (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
     {
@@ -554,18 +710,28 @@ extension UIColor {
     var red: CGFloat = 0
     var green: CGFloat = 0
     var blue: CGFloat = 0
-    if input.count == 8 /* #RRGGBBAA */ {
+    switch input.count {
+    case 3 /* #RGB */:
+      red = Self.colorComponent(from: input, start: 0, length: 1)
+      green = Self.colorComponent(from: input, start: 1, length: 1)
+      blue = Self.colorComponent(from: input, start: 2, length: 1)
+    case 4 /* #RGBA（CSS Color 4，alpha 在末尾，与 8 位 RRGGBBAA 一致）*/:
+      red = Self.colorComponent(from: input, start: 0, length: 1)
+      green = Self.colorComponent(from: input, start: 1, length: 1)
+      blue = Self.colorComponent(from: input, start: 2, length: 1)
+      alpha = Self.colorComponent(from: input, start: 3, length: 1)
+    case 6 /* #RRGGBB */:
+      red = Self.colorComponent(from: input, start: 0, length: 2)
+      green = Self.colorComponent(from: input, start: 2, length: 2)
+      blue = Self.colorComponent(from: input, start: 4, length: 2)
+    case 8 /* #RRGGBBAA（siyuan rgbaToHex 输出格式）*/:
       red = Self.colorComponent(from: input, start: 0, length: 2)
       green = Self.colorComponent(from: input, start: 2, length: 2)
       blue = Self.colorComponent(from: input, start: 4, length: 2)
       alpha = Self.colorComponent(from: input, start: 6, length: 2)
-    } else {
-      let fallback: String
-      if isDarkMode {
-        fallback = "ffffff"
-      } else {
-        fallback = "1e1e1e"
-      }
+    default:
+      // 非法/空值：退化为与外观方向一致的中性色（亮=白、暗=#1e1e1e）
+      let fallback = isDarkMode ? "1e1e1e" : "ffffff"
       red = Self.colorComponent(from: fallback, start: 0, length: 2)
       green = Self.colorComponent(from: fallback, start: 2, length: 2)
       blue = Self.colorComponent(from: fallback, start: 4, length: 2)
