@@ -454,6 +454,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   func saveExportFile(uri: String) {
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      self?.saveExportFileInBackground(uri: uri)
+    }
+  }
+
+  private func saveExportFileInBackground(uri: String) {
     var fileName = (uri as NSString).lastPathComponent
     if let queryIdx = fileName.firstIndex(of: "?") {
       fileName = String(fileName[..<queryIdx])
@@ -463,10 +469,23 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       fileName = "export"
     }
 
-    let srcPath = Iosk.MobileGetExportFilePath(uri)
-    guard !srcPath.isEmpty else {
+    let leaseJSON = Iosk.MobileAcquireExportFile(uri)
+    guard !leaseJSON.isEmpty,
+      let leaseData = leaseJSON.data(using: .utf8),
+      let lease = try? JSONSerialization.jsonObject(with: leaseData) as? [String: Any],
+      let leaseID = lease["leaseID"] as? String,
+      let srcPath = lease["path"] as? String,
+      !leaseID.isEmpty,
+      !srcPath.isEmpty
+    else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
       return
+    }
+    defer {
+      Iosk.MobileReleaseExportFile(leaseID)
+    }
+    if let leasedName = lease["name"] as? String, !leasedName.isEmpty {
+      fileName = leasedName
     }
 
     guard let srcHandle = FileHandle(forReadingAtPath: srcPath) else {
