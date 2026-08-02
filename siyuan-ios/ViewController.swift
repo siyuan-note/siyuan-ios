@@ -730,7 +730,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
           Iosk.MobileShowMsg(Iosk.MobileLanguage(290), 5000)
           self?.notifyExportFileResult(requestID: requestID, status: "error", name: "")
         } else if completed {
-          Iosk.MobileShowMsg(Iosk.MobileLanguage(289), 5000)
           self?.notifyExportFileResult(requestID: requestID, status: "success", name: fileName)
         } else {
           self?.notifyExportFileResult(requestID: requestID, status: "canceled", name: "")
