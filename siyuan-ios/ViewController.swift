@@ -28,6 +28,7 @@ private enum ScriptMessageName: String {
   case setClipboard
   case openLink
   case saveExportFile
+  case saveExportFileV2
   case purchase
   case print
   case exit
@@ -106,6 +107,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, name: ScriptMessageName.openLink.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
       self, name: ScriptMessageName.saveExportFile.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.saveExportFileV2.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
       self, name: ScriptMessageName.purchase.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
@@ -251,7 +254,15 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         UIApplication.shared.open(url as URL, options: [:], completionHandler: nil)
       }
     case .saveExportFile:
-      saveExportFile(uri: message.body as! String)
+      saveExportFile(uri: message.body as! String, requestID: "")
+    case .saveExportFileV2:
+      guard let data = message.body as? [String: Any],
+        let uri = data["uri"] as? String,
+        let requestID = data["requestID"] as? String
+      else {
+        return
+      }
+      saveExportFile(uri: uri, requestID: requestID)
     case .purchase:
       let argument = (message.body as! String).split(separator: " ")
       for pItem in IAPManager.shared.products {
@@ -610,9 +621,9 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     center.removeDeliveredNotifications(withIdentifiers: [identifier])
   }
 
-  func saveExportFile(uri: String) {
+  func saveExportFile(uri: String, requestID: String) {
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      self?.saveExportFileInBackground(uri: uri)
+      self?.saveExportFileInBackground(uri: uri, requestID: requestID)
     }
   }
 
@@ -628,7 +639,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     try? fileManager.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
   }
 
-  private func saveExportFileInBackground(uri: String) {
+  private func saveExportFileInBackground(uri: String, requestID: String) {
     let leaseJSON = Iosk.MobileAcquireExportFile(uri)
     guard !leaseJSON.isEmpty,
       let leaseData = leaseJSON.data(using: .utf8),
@@ -638,6 +649,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       leaseID.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil
     else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
+      notifyExportFileResult(requestID: requestID, status: "error", name: "")
       return
     }
     var releaseLease = true
@@ -654,6 +666,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       let expectedSize = (lease["size"] as? NSNumber)?.int64Value
     else {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(291), 5000)
+      notifyExportFileResult(requestID: requestID, status: "error", name: "")
       return
     }
 
@@ -682,6 +695,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       }
     } catch {
       Iosk.MobileShowMsg(Iosk.MobileLanguage(290), 5000)
+      notifyExportFileResult(requestID: requestID, status: "error", name: "")
       return
     }
 
@@ -698,6 +712,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       guard self.presentedViewController == nil else {
         cleanup()
         Iosk.MobileShowMsg(Iosk.MobileLanguage(290), 5000)
+        self.notifyExportFileResult(requestID: requestID, status: "error", name: "")
         return
       }
       let activityVC = UIActivityViewController(
@@ -709,11 +724,41 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
           x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
       }
 
-      activityVC.completionWithItemsHandler = { _, _, _, _ in
+      activityVC.completionWithItemsHandler = { [weak self] _, completed, _, error in
         cleanup()
+        if error != nil {
+          Iosk.MobileShowMsg(Iosk.MobileLanguage(290), 5000)
+          self?.notifyExportFileResult(requestID: requestID, status: "error", name: "")
+        } else if completed {
+          Iosk.MobileShowMsg(Iosk.MobileLanguage(289), 5000)
+          self?.notifyExportFileResult(requestID: requestID, status: "success", name: fileName)
+        } else {
+          self?.notifyExportFileResult(requestID: requestID, status: "canceled", name: "")
+        }
       }
 
       self.present(activityVC, animated: true)
+    }
+  }
+
+  private func notifyExportFileResult(requestID: String, status: String, name: String) {
+    guard !requestID.isEmpty else {
+      return
+    }
+    var result = ["status": status]
+    if !name.isEmpty {
+      result["name"] = name
+    }
+    guard let resultData = try? JSONSerialization.data(withJSONObject: result),
+      let resultJSON = String(data: resultData, encoding: .utf8),
+      let argumentsData = try? JSONSerialization.data(withJSONObject: [requestID, resultJSON]),
+      let argumentsJSON = String(data: argumentsData, encoding: .utf8)
+    else {
+      return
+    }
+    DispatchQueue.main.async {
+      ViewController.syWebView.evaluateJavaScript(
+        "window.handleSaveExportFileResult && window.handleSaveExportFileResult.apply(null, \(argumentsJSON));")
     }
   }
 }
