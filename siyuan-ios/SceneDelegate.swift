@@ -39,7 +39,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     guard isShorthand else {
       // Normal launch: system loaded Main.storyboard, ViewController.viewDidLoad will start kernel
       for context in connectionOptions.urlContexts {
-        if !(context.url.scheme == "siyuan" && context.url.host == "shorthand") {
+        if isOIDCCallback(context.url) {
+          ViewController.handleOIDCCallback(context.url)
+        } else if !(context.url.scheme == "siyuan" && context.url.host == "shorthand") {
           DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             ViewController.syWebView.evaluateJavaScript(
               "openFileByURL('" + context.url.absoluteString + "')")
@@ -73,12 +75,19 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       let url = context.url
       if url.scheme == "siyuan" && url.host == "shorthand" {
         presentShorthand(text: url.query?.removingPercentEncoding)
+      } else if isOIDCCallback(url) {
+        ViewController.handleOIDCCallback(url)
       } else {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
           ViewController.syWebView.evaluateJavaScript("openFileByURL('" + url.absoluteString + "')")
         }
       }
     }
+  }
+
+  private func isOIDCCallback(_ url: URL) -> Bool {
+    return url.scheme?.lowercased() == "siyuan" && url.host == nil
+      && url.path == "/oidc-callback"
   }
 
   private func presentShorthand(text: String? = nil) {

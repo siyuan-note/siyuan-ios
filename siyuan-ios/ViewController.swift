@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import AuthenticationServices
 import GameController
 import Iosk
 import PDFKit
@@ -35,10 +36,12 @@ private enum ScriptMessageName: String {
   case sendNotification
   case cancelNotification
   case vibrate
+  case openAuthURL
 }
 
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate,
-  WKScriptMessageHandler, UIPrintInteractionControllerDelegate
+  WKScriptMessageHandler, UIPrintInteractionControllerDelegate,
+  ASWebAuthenticationPresentationContextProviding
 {
 
   static let iapManager = IAPManager.shared
@@ -49,6 +52,9 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   var keyboardEndFrame: CGRect?
   var isOrientationTransitioning = false
   var isDarkStyle = false
+  private var oidcAuthSession: ASWebAuthenticationSession?
+  private static var pendingOIDCCallback: String?
+  private static var oidcCallbackDelivering = false
 
   required init(coder: NSCoder) {
     super.init(coder: coder)!
@@ -121,6 +127,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, name: ScriptMessageName.cancelNotification.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
       self, name: ScriptMessageName.vibrate.rawValue)
+    ViewController.syWebView.configuration.userContentController.add(
+      self, name: ScriptMessageName.openAuthURL.rawValue)
 
     // open url
     ViewController.syWebView.navigationDelegate = self
@@ -295,6 +303,23 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       cancelNotification(id: message.body as! Int)
     case .vibrate:
       UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    case .openAuthURL:
+      guard let urlString = message.body as? String, let url = URL(string: urlString),
+        url.scheme == "https" || url.scheme == "http"
+      else {
+        return
+      }
+      oidcAuthSession = ASWebAuthenticationSession(url: url, callbackURLScheme: "siyuan") {
+        callbackURL, error in
+        guard let callbackURL = callbackURL else {
+          ViewController.showOIDCAuthError(error?.localizedDescription ?? "")
+          return
+        }
+        ViewController.handleOIDCCallback(callbackURL)
+      }
+      oidcAuthSession?.presentationContextProvider = self
+      oidcAuthSession?.prefersEphemeralWebBrowserSession = false
+      oidcAuthSession?.start()
     default:
       return
     }
@@ -545,6 +570,9 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    if webView == ViewController.syWebView {
+      ViewController.flushOIDCCallback()
+    }
     // 确保是我们用于打印的那个 webView 实例完成了加载
     if webView == self.printWebView {
       initiatePrintInteraction()
@@ -624,6 +652,47 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   func saveExportFile(uri: String, requestID: String) {
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       self?.saveExportFileInBackground(uri: uri, requestID: requestID)
+    }
+  }
+
+  func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+    return view.window ?? ASPresentationAnchor()
+  }
+
+  static func handleOIDCCallback(_ url: URL) {
+    guard url.scheme?.lowercased() == "siyuan", url.host == nil,
+      url.path == "/oidc-callback"
+    else {
+      return
+    }
+    pendingOIDCCallback = url.absoluteString
+    flushOIDCCallback()
+  }
+
+  private static func showOIDCAuthError(_ message: String) {
+    guard let encoded = try? JSONEncoder().encode(message),
+      let argument = String(data: encoded, encoding: .utf8)
+    else {
+      return
+    }
+    syWebView.evaluateJavaScript("window.handleOIDCAuthError && window.handleOIDCAuthError(\(argument))")
+  }
+
+  private static func flushOIDCCallback() {
+    guard !oidcCallbackDelivering, let callback = pendingOIDCCallback,
+      let encoded = try? JSONEncoder().encode(callback),
+      let argument = String(data: encoded, encoding: .utf8)
+    else {
+      return
+    }
+    oidcCallbackDelivering = true
+    let script = "(() => { if (typeof window.handleOIDCCallback !== 'function') { return false; } "
+      + "window.handleOIDCCallback(\(argument)); return true; })()"
+    syWebView.evaluateJavaScript(script) { result, error in
+      oidcCallbackDelivering = false
+      if error == nil && result as? Bool == true {
+        pendingOIDCCallback = nil
+      }
     }
   }
 
