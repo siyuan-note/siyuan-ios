@@ -660,6 +660,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   static func handleOIDCCallback(_ url: URL) {
+    guard Thread.isMainThread else {
+      DispatchQueue.main.async {
+        ViewController.handleOIDCCallback(url)
+      }
+      return
+    }
     guard url.scheme?.lowercased() == "siyuan", url.host == nil,
       url.path == "/oidc-callback"
     else {
@@ -670,6 +676,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   private static func showOIDCAuthError(_ message: String) {
+    guard Thread.isMainThread else {
+      DispatchQueue.main.async {
+        ViewController.showOIDCAuthError(message)
+      }
+      return
+    }
     guard let encoded = try? JSONEncoder().encode(message),
       let argument = String(data: encoded, encoding: .utf8)
     else {
