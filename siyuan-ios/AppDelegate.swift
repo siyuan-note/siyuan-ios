@@ -70,6 +70,10 @@ private struct LANSyncDiscoveryInfo: Decodable {
   let txt: [String: String]
 }
 
+private struct LANSyncPeer {
+  let service: NetService
+}
+
 final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
   static let shared = LANSyncBonjour()
 
@@ -78,6 +82,8 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
   private var publishedInfo = ""
   private var refreshTimer: Timer?
   private var resolvingServices: [NetService] = []
+  private var discoveredPeers: [String: LANSyncPeer] = [:]
+  private var lastPeerRefresh = Date.distantPast
 
   func start() {
     guard refreshTimer == nil else { return }
@@ -94,6 +100,7 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
   }
 
   private func refreshAdvertisement() {
+    refreshDiscoveredPeers()
     let rawInfo = Iosk.MobileLANSyncDiscoveryInfo()
     guard !rawInfo.isEmpty, rawInfo != publishedInfo,
       let data = rawInfo.data(using: .utf8),
@@ -135,6 +142,15 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
       service.delegate = nil
     }
     resolvingServices.removeAll()
+    for instance in discoveredPeers.keys {
+      _ = Iosk.MobileRemoveLANSyncPeer(instance)
+    }
+    for peer in discoveredPeers.values {
+      peer.service.stop()
+      peer.service.delegate = nil
+    }
+    discoveredPeers.removeAll()
+    lastPeerRefresh = Date.distantPast
   }
 
   func netServiceBrowser(
@@ -160,6 +176,7 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
     for addressData in sender.addresses ?? [] {
       guard let address = numericAddress(addressData) else { continue }
       if Iosk.MobileAddLANSyncPeer(sender.name, address, Int(sender.port), txtJSON) {
+        discoveredPeers[sender.name] = LANSyncPeer(service: sender)
         break
       }
     }
@@ -169,6 +186,11 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
     _ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool
   ) {
     removeResolvingService(service)
+    if let peer = discoveredPeers.removeValue(forKey: service.name) {
+      peer.service.stop()
+      peer.service.delegate = nil
+    }
+    _ = Iosk.MobileRemoveLANSyncPeer(service.name)
   }
 
   func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
@@ -189,6 +211,15 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
 
   private func removeResolvingService(_ service: NetService) {
     resolvingServices.removeAll { $0 === service }
+  }
+
+  private func refreshDiscoveredPeers() {
+    let now = Date()
+    guard now.timeIntervalSince(lastPeerRefresh) >= 30 else { return }
+    lastPeerRefresh = now
+    for peer in discoveredPeers.values {
+      peer.service.resolve(withTimeout: 3)
+    }
   }
 
   private func numericAddress(_ data: Data) -> String? {
