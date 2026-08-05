@@ -7,3 +7,4 @@
 */
 "CFBundleDisplayName" = "思源笔记";
 "shorthand_shortcut_title" = "闪念速记";
+"NSLocalNetworkUsageDescription" = "发现局域网内可信的思源设备，以加速加密数据同步";

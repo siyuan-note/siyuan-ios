@@ -157,6 +157,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   }
 
   func sceneDidBecomeActive(_ scene: UIScene) {
+    LANSyncBonjour.shared.start()
     // App Intent（iOS 16+ 快捷指令/Siri，见 ShorthandAppShortcuts）入队的闪念请求：
     if let text = ShorthandLauncher.consume() {
       presentShorthand(text: text.isEmpty ? nil : text)
@@ -244,6 +245,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   }
 
   func sceneDidEnterBackground(_ scene: UIScene) {
+    LANSyncBonjour.shared.stop()
     guard !(window?.rootViewController is ShorthandViewController) else { return }
     ViewController.syWebView.evaluateJavaScript("lockscreenByMode();")
   }

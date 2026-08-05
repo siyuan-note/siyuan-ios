@@ -7,3 +7,4 @@
 */
 "CFBundleDisplayName" = "SiYuan";
 "shorthand_shortcut_title" = "Flash Shorthand";
+"NSLocalNetworkUsageDescription" = "Discover trusted SiYuan devices on your local network to accelerate encrypted data synchronization";
