@@ -17,6 +17,7 @@
  */
 
 import Iosk
+import Network
 import UIKit
 
 @main
@@ -74,10 +75,10 @@ private struct LANSyncPeer {
   let service: NetService
 }
 
-final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
+final class LANSyncBonjour: NSObject, NetServiceDelegate {
   static let shared = LANSyncBonjour()
 
-  private var browser: NetServiceBrowser?
+  private var browser: NWBrowser?
   private var publishedService: NetService?
   private var publishedInfo = ""
   private var refreshTimer: Timer?
@@ -101,18 +102,20 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
 
   private func refreshAdvertisement() {
     refreshDiscoveredPeers()
+    guard Iosk.MobileLANSyncActive() else {
+      stopDiscovery()
+      return
+    }
+    ensureBrowser()
+
     let rawInfo = Iosk.MobileLANSyncDiscoveryInfo()
     guard !rawInfo.isEmpty,
       let data = rawInfo.data(using: .utf8),
       let info = try? JSONDecoder().decode(LANSyncDiscoveryInfo.self, from: data)
     else {
-      if rawInfo.isEmpty {
-        stopDiscovery()
-      }
       return
     }
 
-    ensureBrowser()
     guard rawInfo != publishedInfo else { return }
     publishedService?.stop()
     let service = NetService(
@@ -127,15 +130,33 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
 
   private func ensureBrowser() {
     guard browser == nil else { return }
-    let currentBrowser = NetServiceBrowser()
-    currentBrowser.delegate = self
-    currentBrowser.searchForServices(ofType: "_siyuan-sync._tcp.", inDomain: "local.")
+    let descriptor = NWBrowser.Descriptor.bonjour(type: "_siyuan-sync._tcp", domain: "local.")
+    let currentBrowser = NWBrowser(for: descriptor, using: .tcp)
+    currentBrowser.stateUpdateHandler = { [weak self, weak currentBrowser] state in
+      guard let self = self, let currentBrowser = currentBrowser else { return }
+      guard self.browser === currentBrowser else { return }
+      switch state {
+      case .waiting(let error):
+        print("LAN sync Bonjour browser is waiting: \(error)")
+      case .failed(let error):
+        print("LAN sync Bonjour browser failed: \(error)")
+        currentBrowser.cancel()
+        self.browser = nil
+      default:
+        break
+      }
+    }
+    currentBrowser.browseResultsChangedHandler = { [weak self] _, changes in
+      self?.handleBrowserChanges(changes)
+    }
     browser = currentBrowser
+    currentBrowser.start(queue: .main)
   }
 
   private func stopDiscovery() {
-    browser?.stop()
-    browser?.delegate = nil
+    browser?.stateUpdateHandler = nil
+    browser?.browseResultsChangedHandler = nil
+    browser?.cancel()
     browser = nil
     publishedService?.stop()
     publishedService?.delegate = nil
@@ -157,12 +178,54 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
     lastPeerRefresh = Date.distantPast
   }
 
-  func netServiceBrowser(
-    _ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool
-  ) {
+  private func resolveService(name: String, type: String, domain: String) {
+    guard !resolvingServices.contains(where: { $0.name == name }) else { return }
+    let service = NetService(
+      domain: normalizedBonjourDomain(domain), type: normalizedBonjourType(type), name: name)
     service.delegate = self
     resolvingServices.append(service)
     service.resolve(withTimeout: 3)
+  }
+
+  private func handleBrowserChanges(_ changes: Set<NWBrowser.Result.Change>) {
+    for change in changes {
+      switch change {
+      case .added(let result):
+        if let service = bonjourService(from: result) {
+          resolveService(name: service.name, type: service.type, domain: service.domain)
+        }
+      case .removed(let result):
+        if let service = bonjourService(from: result) {
+          removeDiscoveredPeer(service.name)
+        }
+      case .changed(old: let old, new: let new, flags: _):
+        if let service = bonjourService(from: old) {
+          removeDiscoveredPeer(service.name)
+        }
+        if let service = bonjourService(from: new) {
+          resolveService(name: service.name, type: service.type, domain: service.domain)
+        }
+      case .identical:
+        break
+      @unknown default:
+        break
+      }
+    }
+  }
+
+  private func bonjourService(from result: NWBrowser.Result) -> (
+    name: String, type: String, domain: String
+  )? {
+    guard case .service(let name, let type, let domain, _) = result.endpoint else { return nil }
+    return (name, type, domain)
+  }
+
+  private func normalizedBonjourType(_ type: String) -> String {
+    return type.hasSuffix(".") ? type : type + "."
+  }
+
+  private func normalizedBonjourDomain(_ domain: String) -> String {
+    return domain.hasSuffix(".") ? domain : domain + "."
   }
 
   func netServiceDidResolveAddress(_ sender: NetService) {
@@ -186,30 +249,30 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
     }
   }
 
-  func netServiceBrowser(
-    _ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool
-  ) {
-    removeResolvingService(service)
-    if let peer = discoveredPeers.removeValue(forKey: service.name) {
+  private func removeDiscoveredPeer(_ instance: String) {
+    resolvingServices.removeAll { service in
+      guard service.name == instance else { return false }
+      service.stop()
+      service.delegate = nil
+      return true
+    }
+    if let peer = discoveredPeers.removeValue(forKey: instance) {
       peer.service.stop()
       peer.service.delegate = nil
     }
-    _ = Iosk.MobileRemoveLANSyncPeer(service.name)
-  }
-
-  func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
-    browser.delegate = nil
-    self.browser = nil
+    _ = Iosk.MobileRemoveLANSyncPeer(instance)
   }
 
   func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
     guard sender === publishedService else { return }
+    print("LAN sync Bonjour service failed to publish: \(errorDict)")
     sender.delegate = nil
     publishedService = nil
     publishedInfo = ""
   }
 
   func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
+    print("LAN sync Bonjour service failed to resolve: \(errorDict)")
     removeResolvingService(sender)
   }
 
