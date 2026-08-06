@@ -102,7 +102,7 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
   private func refreshAdvertisement() {
     refreshDiscoveredPeers()
     let rawInfo = Iosk.MobileLANSyncDiscoveryInfo()
-    guard !rawInfo.isEmpty, rawInfo != publishedInfo,
+    guard !rawInfo.isEmpty,
       let data = rawInfo.data(using: .utf8),
       let info = try? JSONDecoder().decode(LANSyncDiscoveryInfo.self, from: data)
     else {
@@ -112,12 +112,8 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
       return
     }
 
-    if browser == nil {
-      let currentBrowser = NetServiceBrowser()
-      currentBrowser.delegate = self
-      currentBrowser.searchForServices(ofType: "_siyuan-sync._tcp.", inDomain: "local.")
-      browser = currentBrowser
-    }
+    ensureBrowser()
+    guard rawInfo != publishedInfo else { return }
     publishedService?.stop()
     let service = NetService(
       domain: "local.", type: info.serviceType, name: info.instance, port: info.port)
@@ -127,6 +123,14 @@ final class LANSyncBonjour: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
     service.publish()
     publishedService = service
     publishedInfo = rawInfo
+  }
+
+  private func ensureBrowser() {
+    guard browser == nil else { return }
+    let currentBrowser = NetServiceBrowser()
+    currentBrowser.delegate = self
+    currentBrowser.searchForServices(ofType: "_siyuan-sync._tcp.", inDomain: "local.")
+    browser = currentBrowser
   }
 
   private func stopDiscovery() {
