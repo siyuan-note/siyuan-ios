@@ -43,8 +43,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
           ViewController.handleOIDCCallback(context.url)
         } else if !(context.url.scheme == "siyuan" && context.url.host == "shorthand") {
           DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-            ViewController.syWebView.evaluateJavaScript(
-              "openFileByURL('" + context.url.absoluteString + "')")
+            guard let encoded = try? JSONEncoder().encode(context.url.absoluteString),
+              let argument = String(data: encoded, encoding: .utf8)
+            else {
+              return
+            }
+            ViewController.syWebView.evaluateJavaScript("openFileByURL(\(argument))")
           }
         }
       }
@@ -79,7 +83,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         ViewController.handleOIDCCallback(url)
       } else {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-          ViewController.syWebView.evaluateJavaScript("openFileByURL('" + url.absoluteString + "')")
+          guard let encoded = try? JSONEncoder().encode(url.absoluteString),
+            let argument = String(data: encoded, encoding: .utf8)
+          else {
+            return
+          }
+          ViewController.syWebView.evaluateJavaScript("openFileByURL(\(argument))")
         }
       }
     }
