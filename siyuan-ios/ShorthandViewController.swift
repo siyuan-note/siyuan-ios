@@ -31,12 +31,20 @@ class ShorthandViewController: UIViewController {
   private let submitButton = UIButton(type: .system)
   private let cancelButton = UIButton(type: .system)
   private let placeholderLabel = UILabel()
+  private let draftStore = ShorthandDraftStore(fileName: "main.md")
+  private var isFinishing = false
+  var onFinish: (() -> Void)?
+
+  var isCompleting: Bool {
+    return isFinishing
+  }
 
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .systemBackground
     applyAppearance()
     setupUI()
+    restoreDraft()
   }
 
   override func viewDidAppear(_ animated: Bool) {
@@ -44,6 +52,11 @@ class ShorthandViewController: UIViewController {
     // 无内容时确保提交按钮置灰，覆盖冷启动 root VC / present / URL scheme 等各入口
     refreshSubmitButton()
     textView.becomeFirstResponder()
+  }
+
+  override func viewWillDisappear(_ animated: Bool) {
+    flushDraft()
+    super.viewWillDisappear(animated)
   }
 
   /// 读取内核持久化的 appearance 配置，使界面与思源主题保持一致。
@@ -129,34 +142,49 @@ class ShorthandViewController: UIViewController {
   /// 根据当前文本是否有非空内容，统一刷新提交按钮的可用态、样式与占位提示。
   private func refreshSubmitButton() {
     let hasContent = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    submitButton.isEnabled = hasContent
-    submitButton.backgroundColor = hasContent ? .systemBlue : .systemGray3
+    let enabled = hasContent && !isFinishing
+    submitButton.isEnabled = enabled
+    submitButton.backgroundColor = enabled ? .systemBlue : .systemGray3
     placeholderLabel.isHidden = !textView.text.isEmpty
   }
 
   func appendText(_ text: String) {
-    textView.text += text
+    loadViewIfNeeded()
+    guard !isFinishing else { return }
+    textView.text = joinContent(textView.text, text)
     refreshSubmitButton()
+    draftStore.scheduleSave(textView.text)
   }
 
   @objc private func onSubmit() {
-    let text = textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !text.isEmpty else { return }
+    let rawText = textView.text ?? ""
+    let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty && !isFinishing else { return }
+
+    guard draftStore.flush(rawText) else {
+      showDraftStorageError()
+      return
+    }
+    isFinishing = true
+    refreshSubmitButton()
 
     let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
     let workspaceBaseDir = urls[0].path
     let shorthandsDir = workspaceBaseDir + "/home/.config/siyuan/shortcuts/shorthands/"
 
-    try? FileManager.default.createDirectory(
-      atPath: shorthandsDir, withIntermediateDirectories: true, attributes: nil)
-
-    let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
-    let filePath = shorthandsDir + String(timestamp) + ".md"
-
     do {
-      try text.write(toFile: filePath, atomically: true, encoding: .utf8)
+      try FileManager.default.createDirectory(
+        atPath: shorthandsDir, withIntermediateDirectories: true, attributes: nil)
+      let filePath = nextShorthandFilePath(in: shorthandsDir)
+      guard draftStore.promote(rawText, to: URL(fileURLWithPath: filePath)) else {
+        throw ShorthandViewControllerError.promotionFailed
+      }
     } catch {
       print("shorthand write failed: \(error)")
+      isFinishing = false
+      refreshSubmitButton()
+      showDraftStorageError()
+      return
     }
 
     textView.text = ""
@@ -170,22 +198,96 @@ class ShorthandViewController: UIViewController {
   /// present 场景直接 dismiss 回到主界面；root VC（冷启动）场景挂起应用，
   /// 下次激活由 sceneDidBecomeActive 兜底恢复主界面。
   @objc private func onCancel() {
+    isFinishing = true
+    refreshSubmitButton()
+    guard draftStore.clear() else {
+      isFinishing = false
+      refreshSubmitButton()
+      showDraftStorageError()
+      return
+    }
+    textView.text = ""
+    refreshSubmitButton()
     exitShorthand()
+  }
+
+  func flushDraft() {
+    guard !isFinishing else { return }
+    if !draftStore.flush(textView.text ?? "") {
+      print("shorthand draft flush failed")
+    }
+  }
+
+  private func restoreDraft() {
+    switch draftStore.load() {
+    case .success(let restoredText):
+      textView.text = joinContent(restoredText, textView.text ?? "")
+      refreshSubmitButton()
+      if !draftStore.flush(textView.text) {
+        showDraftStorageError()
+      }
+    case .failure:
+      refreshSubmitButton()
+      DispatchQueue.main.async { [weak self] in
+        self?.showDraftStorageError()
+      }
+    }
+  }
+
+  private func joinContent(_ existing: String, _ incoming: String) -> String {
+    guard !incoming.isEmpty else { return existing }
+    guard !existing.isEmpty else { return incoming }
+
+    var separator = "\n\n"
+    if existing.hasSuffix("\n\n") {
+      separator = ""
+    } else if existing.hasSuffix("\n") {
+      separator = "\n"
+    }
+    return existing + separator + incoming
+  }
+
+  private func nextShorthandFilePath(in directory: String) -> String {
+    var timestamp = Int64(Date().timeIntervalSince1970 * 1000)
+    var path = directory + String(timestamp) + ".md"
+    while FileManager.default.fileExists(atPath: path) {
+      timestamp += 1
+      path = directory + String(timestamp) + ".md"
+    }
+    return path
+  }
+
+  private func showDraftStorageError() {
+    guard presentedViewController == nil else { return }
+    let alert = UIAlertController(
+      title: NSLocalizedString("shorthand_storage_error", comment: ""),
+      message: nil,
+      preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .default))
+    present(alert, animated: true)
   }
 
   /// 关闭闪念界面：present 出来的则 dismiss，作为 root 的则交由 SceneDelegate 挂起并恢复主界面。
   private func exitShorthand() {
     if presentingViewController != nil {
-      dismiss(animated: true)
+      dismiss(animated: true) { [weak self] in
+        self?.onFinish?()
+      }
     } else {
       NotificationCenter.default.post(name: Self.didSubmitAsRootNotification, object: nil)
     }
   }
 }
 
+private enum ShorthandViewControllerError: Error {
+  case promotionFailed
+}
+
 extension ShorthandViewController: UITextViewDelegate {
   func textViewDidChange(_ textView: UITextView) {
+    guard !isFinishing else { return }
     refreshSubmitButton()
+    draftStore.scheduleSave(textView.text)
   }
 }
 

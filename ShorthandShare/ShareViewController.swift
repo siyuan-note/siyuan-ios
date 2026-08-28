@@ -30,6 +30,13 @@ class ShareViewController: UIViewController, UITextViewDelegate {
     private let submitButton = UIButton(type: .system)
     private let cancelButton = UIButton(type: .system)
     private let placeholderLabel = UILabel()
+    private let draftStore = ShorthandDraftStore(fileName: "share.md")
+    private let attachmentQueue = DispatchQueue(label: "com.ld246.siyuan.shorthand-attachments")
+    private var attachmentState = ShorthandAttachmentState.active
+    private var loadingProgresses: [Progress] = []
+    private var lifecycleObservers: [NSObjectProtocol] = []
+    private var pendingSharedItemCount = 0
+    private var isFinishing = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -40,6 +47,10 @@ class ShareViewController: UIViewController, UITextViewDelegate {
         navigationController?.modalPresentationStyle = .fullScreen
         view.backgroundColor = .systemBackground
         setupUI()
+        if restoreDraft() {
+            cleanupStagedAssets()
+        }
+        observeExtensionLifecycle()
         loadSharedContent()
     }
 
@@ -47,6 +58,17 @@ class ShareViewController: UIViewController, UITextViewDelegate {
         super.viewDidAppear(animated)
         refreshSubmitButton()
         textView.becomeFirstResponder()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        flushDraft()
+        super.viewWillDisappear(animated)
+    }
+
+    deinit {
+        for observer in lifecycleObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     private func setupUI() {
@@ -126,8 +148,10 @@ class ShareViewController: UIViewController, UITextViewDelegate {
     /// 根据当前文本是否有非空内容，统一刷新提交按钮的可用态、样式与占位提示。
     private func refreshSubmitButton() {
         let hasContent = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        submitButton.isEnabled = hasContent
-        submitButton.backgroundColor = hasContent ? .systemBlue : .systemGray3
+        let enabled = hasContent && pendingSharedItemCount == 0 && !isFinishing
+        submitButton.isEnabled = enabled
+        submitButton.backgroundColor = enabled ? .systemBlue : .systemGray3
+        cancelButton.isEnabled = !isFinishing
         placeholderLabel.isHidden = !textView.text.isEmpty
     }
 
@@ -139,122 +163,205 @@ class ShareViewController: UIViewController, UITextViewDelegate {
             guard let attachments = item.attachments else { continue }
             for provider in attachments {
                 if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                    loadURL(from: provider)
+                    pendingSharedItemCount += 1
+                    loadURL(from: provider) { [weak self] in self?.sharedItemDidFinishLoading() }
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.html.identifier) {
-                    loadHtml(from: provider)
+                    pendingSharedItemCount += 1
+                    loadHtml(from: provider) { [weak self] in self?.sharedItemDidFinishLoading() }
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-                    loadText(from: provider)
+                    pendingSharedItemCount += 1
+                    loadText(from: provider) { [weak self] in self?.sharedItemDidFinishLoading() }
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
-                    loadFile(from: provider, typeIdentifier: UTType.image.identifier)
+                    pendingSharedItemCount += 1
+                    loadFile(
+                        from: provider, typeIdentifier: UTType.image.identifier,
+                        completion: { [weak self] in self?.sharedItemDidFinishLoading() })
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-                    loadFile(from: provider, typeIdentifier: UTType.movie.identifier)
+                    pendingSharedItemCount += 1
+                    loadFile(
+                        from: provider, typeIdentifier: UTType.movie.identifier,
+                        completion: { [weak self] in self?.sharedItemDidFinishLoading() })
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.audio.identifier) {
-                    loadFile(from: provider, typeIdentifier: UTType.audio.identifier)
+                    pendingSharedItemCount += 1
+                    loadFile(
+                        from: provider, typeIdentifier: UTType.audio.identifier,
+                        completion: { [weak self] in self?.sharedItemDidFinishLoading() })
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.data.identifier) {
-                    loadFile(from: provider, typeIdentifier: UTType.data.identifier)
+                    pendingSharedItemCount += 1
+                    loadFile(
+                        from: provider, typeIdentifier: UTType.data.identifier,
+                        completion: { [weak self] in self?.sharedItemDidFinishLoading() })
                 }
             }
         }
+        refreshSubmitButton()
     }
 
-    private func loadURL(from provider: NSItemProvider) {
-        provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] (item, error) in
-            guard let self = self, let url = item as? URL else { return }
+    private func loadURL(from provider: NSItemProvider, completion: @escaping () -> Void) {
+        let progress = provider.loadItem(
+            forTypeIdentifier: UTType.url.identifier, options: nil
+        ) { [weak self] (item, error) in
+            guard let self = self, let url = item as? URL else {
+                DispatchQueue.main.async(execute: completion)
+                return
+            }
             if url.isFileURL {
-                self.appendFile(from: url)
+                self.appendFile(from: url, completion: completion)
                 return
             }
             let link = "<" + url.absoluteString + ">"
             DispatchQueue.main.async {
-                self.placeholderLabel.isHidden = true
-                self.textView.text += link
-                self.refreshSubmitButton()
+                self.appendContent(link)
+                completion()
             }
         }
+        loadingProgresses.append(progress)
     }
 
-    private func loadText(from provider: NSItemProvider) {
-        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { [weak self] (text, error) in
-            guard let self = self, let text = text as? String else { return }
+    private func loadText(from provider: NSItemProvider, completion: @escaping () -> Void) {
+        let progress = provider.loadItem(
+            forTypeIdentifier: UTType.plainText.identifier, options: nil
+        ) { [weak self] (text, error) in
+            guard let self = self, let text = text as? String else {
+                DispatchQueue.main.async(execute: completion)
+                return
+            }
             DispatchQueue.main.async {
-                self.placeholderLabel.isHidden = true
-                self.textView.text += text
-                self.refreshSubmitButton()
+                self.appendContent(text)
+                completion()
             }
         }
+        loadingProgresses.append(progress)
     }
 
-    private func loadHtml(from provider: NSItemProvider) {
-        provider.loadItem(forTypeIdentifier: UTType.html.identifier, options: nil) { [weak self] (html, error) in
-            guard let self = self, let html = html as? String else { return }
+    private func loadHtml(from provider: NSItemProvider, completion: @escaping () -> Void) {
+        let progress = provider.loadItem(
+            forTypeIdentifier: UTType.html.identifier, options: nil
+        ) { [weak self] (html, error) in
+            guard let self = self, let html = html as? String else {
+                DispatchQueue.main.async(execute: completion)
+                return
+            }
             let displayText = Iosk.MobileHTML2Markdown(html) ?? html
             DispatchQueue.main.async {
-                self.placeholderLabel.isHidden = true
-                self.textView.text += displayText
-                self.refreshSubmitButton()
+                self.appendContent(displayText)
+                completion()
             }
         }
+        loadingProgresses.append(progress)
     }
 
-    private func loadFile(from provider: NSItemProvider, typeIdentifier: String) {
-        provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] (url, error) in
-            guard let self = self, let url = url else { return }
-            self.appendFile(from: url, typeIdentifier: typeIdentifier)
+    private func loadFile(
+        from provider: NSItemProvider, typeIdentifier: String, completion: @escaping () -> Void
+    ) {
+        let progress = provider.loadFileRepresentation(
+            forTypeIdentifier: typeIdentifier
+        ) { [weak self] (url, error) in
+            guard let self = self, let url = url else {
+                DispatchQueue.main.async(execute: completion)
+                return
+            }
+            self.appendFile(from: url, typeIdentifier: typeIdentifier, completion: completion)
         }
+        loadingProgresses.append(progress)
     }
 
-    /// 将分享来源的临时文件复制到闪念资源目录，避免保存随后失效的 file:// 地址。
-    private func appendFile(from url: URL, typeIdentifier: String? = nil) {
-        let rawName = url.lastPathComponent
-        var baseName = Iosk.MobileFilepathBase(rawName)
-        baseName = Iosk.MobileFilterUploadFileName(baseName)
-        let fileName = Iosk.MobileAssetName(baseName)
-        let assetsDir = shorthandsDir() + "assets/"
-        try? FileManager.default.createDirectory(
-            atPath: assetsDir, withIntermediateDirectories: true, attributes: nil)
-
-        let destURL = URL(fileURLWithPath: assetsDir + fileName)
-        try? FileManager.default.copyItem(at: url, to: destURL)
-
-        let contentType = typeIdentifier.flatMap(UTType.init)
-            ?? UTType(filenameExtension: url.pathExtension)
-        let link: String
-        if contentType?.conforms(to: .image) == true {
-            link = "![" + fileName + "](assets/" + fileName + ")"
-        } else {
-            link = "[" + fileName + "](assets/" + fileName + ")"
+    /// 在分享回调返回前将临时文件复制到草稿资源目录，保证恢复的草稿仍可引用附件。
+    private func appendFile(
+        from url: URL, typeIdentifier: String? = nil, completion: @escaping () -> Void
+    ) {
+        var link: String?
+        var copyError: Error?
+        attachmentQueue.sync {
+            guard attachmentState == .active else { return }
+            do {
+                link = try stageAttachment(from: url, typeIdentifier: typeIdentifier)
+            } catch {
+                copyError = error
+            }
         }
-
+        if let copyError = copyError {
+            print("shorthand asset copy failed: \(copyError)")
+        }
         DispatchQueue.main.async {
-            self.placeholderLabel.isHidden = true
-            self.textView.text += link + "\n\n"
-            self.refreshSubmitButton()
+            if let link = link {
+                self.appendContent(link + "\n\n")
+            }
+            completion()
         }
     }
 
     @objc private func submit() {
-        let text = textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            dismissExtension()
+        let rawText = textView.text ?? ""
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        guard pendingSharedItemCount == 0 && !isFinishing else { return }
+
+        guard draftStore.flush(rawText) else {
+            showStorageError()
             return
         }
-
-        let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
-        let filePath = shorthandsDir() + String(timestamp) + ".md"
-
-        try? FileManager.default.createDirectory(atPath: shorthandsDir(), withIntermediateDirectories: true, attributes: nil)
-
-        do {
-            try text.write(toFile: filePath, atomically: true, encoding: .utf8)
-        } catch {
-            print("shorthand write failed: \(error)")
+        isFinishing = true
+        refreshSubmitButton()
+        attachmentQueue.sync {
+            attachmentState = .submitting
         }
 
-        dismissExtension()
+        attachmentQueue.async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.promoteStagedAttachments(referencedBy: text)
+                let directoryURL = try self.shorthandsDirectory()
+                try FileManager.default.createDirectory(
+                    at: directoryURL, withIntermediateDirectories: true, attributes: nil)
+                let fileURL = self.nextShorthandFileURL(in: directoryURL)
+                guard self.draftStore.promote(rawText, to: fileURL) else {
+                    throw ShorthandShareError.promotionFailed
+                }
+            } catch {
+                self.attachmentState = .active
+                DispatchQueue.main.async {
+                    self.isFinishing = false
+                    self.refreshSubmitButton()
+                    self.showStorageError()
+                }
+                print("shorthand write failed: \(error)")
+                return
+            }
+
+            self.removeStagedAttachments()
+            DispatchQueue.main.async {
+                self.textView.text = ""
+                self.dismissExtension()
+            }
+        }
     }
 
     @objc private func cancel() {
-        dismissExtension()
+        guard !isFinishing else { return }
+        isFinishing = true
+        refreshSubmitButton()
+
+        guard draftStore.clear() else {
+            isFinishing = false
+            refreshSubmitButton()
+            showStorageError()
+            return
+        }
+        attachmentQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.attachmentState = .cancelled
+            self.removeStagedAttachments()
+            DispatchQueue.main.async {
+                for progress in self.loadingProgresses {
+                    progress.cancel()
+                }
+                self.loadingProgresses.removeAll()
+                self.pendingSharedItemCount = 0
+                self.textView.text = ""
+                self.dismissExtension()
+            }
+        }
     }
 
     private func dismissExtension() {
@@ -263,15 +370,249 @@ class ShareViewController: UIViewController, UITextViewDelegate {
 
     /// 分享扩展进程的 Documents 落不到主 App 容器，故写入 App Group 共享容器，
     /// 由主 App `SceneDelegate.moveSharedShorthands()` 在回前台时搬运到工作空间对应目录。
-    private func shorthandsDir() -> String {
-        let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.com.ld246.siyuan")
-        return (containerURL?.path ?? NSTemporaryDirectory()) + "/home/.config/siyuan/shortcuts/shorthands/"
+    private func shorthandsDirectory() throws -> URL {
+        guard
+            let containerURL = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: "group.com.ld246.siyuan")
+        else {
+            throw ShorthandShareError.appGroupUnavailable
+        }
+        return containerURL.appendingPathComponent(
+            "home/.config/siyuan/shortcuts/shorthands", isDirectory: true)
+    }
+
+    private func stagedAssetsDirectory(createDirectory: Bool = true) throws -> URL {
+        guard
+            let containerURL = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: "group.com.ld246.siyuan")
+        else {
+            throw ShorthandShareError.appGroupUnavailable
+        }
+        let directoryURL = containerURL
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+            .appendingPathComponent("ShorthandDrafts", isDirectory: true)
+            .appendingPathComponent("share-assets", isDirectory: true)
+        if createDirectory {
+            try FileManager.default.createDirectory(
+                at: directoryURL, withIntermediateDirectories: true, attributes: nil)
+        }
+        return directoryURL
+    }
+
+    private func stageAttachment(from url: URL, typeIdentifier: String?) throws -> String {
+        let rawName = url.lastPathComponent
+        var baseName = Iosk.MobileFilepathBase(rawName)
+        baseName = Iosk.MobileFilterUploadFileName(baseName)
+        let stagedAssetsURL = try stagedAssetsDirectory()
+        let formalAssetsURL = try shorthandsDirectory().appendingPathComponent("assets", isDirectory: true)
+        var fileName = Iosk.MobileAssetName(baseName)
+        while FileManager.default.fileExists(
+            atPath: stagedAssetsURL.appendingPathComponent(fileName).path)
+            || FileManager.default.fileExists(
+                atPath: formalAssetsURL.appendingPathComponent(fileName).path)
+        {
+            fileName = Iosk.MobileAssetName(baseName)
+        }
+
+        let partialURL = stagedAssetsURL.appendingPathComponent(
+            ".shorthand-partial-" + UUID().uuidString)
+        let destinationURL = stagedAssetsURL.appendingPathComponent(fileName)
+        do {
+            try FileManager.default.copyItem(at: url, to: partialURL)
+            try FileManager.default.moveItem(at: partialURL, to: destinationURL)
+        } catch {
+            try? FileManager.default.removeItem(at: partialURL)
+            throw error
+        }
+
+        let contentType = typeIdentifier.flatMap(UTType.init)
+            ?? UTType(filenameExtension: url.pathExtension)
+        if contentType?.conforms(to: .image) == true {
+            return "![" + fileName + "](assets/" + fileName + ")"
+        }
+        return "[" + fileName + "](assets/" + fileName + ")"
+    }
+
+    private func promoteStagedAttachments(referencedBy text: String) throws {
+        let sourceDirectoryURL = try stagedAssetsDirectory(createDirectory: false)
+        guard FileManager.default.fileExists(atPath: sourceDirectoryURL.path) else { return }
+
+        let targetDirectoryURL = try shorthandsDirectory().appendingPathComponent("assets", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: targetDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        let sourceURLs = try FileManager.default.contentsOfDirectory(
+            at: sourceDirectoryURL, includingPropertiesForKeys: [.isRegularFileKey])
+        for sourceURL in sourceURLs {
+            let fileName = sourceURL.lastPathComponent
+            guard !fileName.hasPrefix(".shorthand-partial-") else { continue }
+            guard try sourceURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else {
+                throw ShorthandShareError.invalidStagedAsset
+            }
+            guard text.contains("assets/" + fileName) else { continue }
+
+            let targetURL = targetDirectoryURL.appendingPathComponent(fileName)
+            if FileManager.default.fileExists(atPath: targetURL.path) {
+                guard FileManager.default.contentsEqual(atPath: sourceURL.path, andPath: targetURL.path) else {
+                    throw ShorthandShareError.assetCollision
+                }
+                continue
+            }
+
+            let partialURL = targetDirectoryURL.appendingPathComponent(
+                ".shorthand-partial-" + UUID().uuidString)
+            do {
+                try FileManager.default.copyItem(at: sourceURL, to: partialURL)
+                try FileManager.default.moveItem(at: partialURL, to: targetURL)
+            } catch {
+                try? FileManager.default.removeItem(at: partialURL)
+                throw error
+            }
+        }
+    }
+
+    private func cleanupStagedAssets() {
+        let referencedText = textView.text ?? ""
+        attachmentQueue.sync {
+            do {
+                let stagedDirectoryURL = try stagedAssetsDirectory(createDirectory: false)
+                if FileManager.default.fileExists(atPath: stagedDirectoryURL.path) {
+                    let stagedURLs = try FileManager.default.contentsOfDirectory(
+                        at: stagedDirectoryURL, includingPropertiesForKeys: nil)
+                    for url in stagedURLs {
+                        let fileName = url.lastPathComponent
+                        if fileName.hasPrefix(".shorthand-partial-")
+                            || !referencedText.contains("assets/" + fileName)
+                        {
+                            try FileManager.default.removeItem(at: url)
+                        }
+                    }
+                }
+                let formalDirectoryURL = try shorthandsDirectory().appendingPathComponent(
+                    "assets", isDirectory: true)
+                try removePartialFiles(in: formalDirectoryURL)
+            } catch {
+                print("shorthand staged asset cleanup failed: \(error)")
+            }
+        }
+    }
+
+    private func removePartialFiles(in directoryURL: URL) throws {
+        guard FileManager.default.fileExists(atPath: directoryURL.path) else { return }
+        let urls = try FileManager.default.contentsOfDirectory(
+            at: directoryURL, includingPropertiesForKeys: nil)
+        for url in urls where url.lastPathComponent.hasPrefix(".shorthand-partial-") {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func removeStagedAttachments() {
+        do {
+            let directoryURL = try stagedAssetsDirectory(createDirectory: false)
+            guard FileManager.default.fileExists(atPath: directoryURL.path) else { return }
+            try FileManager.default.removeItem(at: directoryURL)
+        } catch {
+            print("shorthand staged asset cleanup failed: \(error)")
+        }
     }
 
     func textViewDidChange(_ textView: UITextView) {
+        guard !isFinishing else { return }
+        refreshSubmitButton()
+        draftStore.scheduleSave(textView.text)
+    }
+
+    private func restoreDraft() -> Bool {
+        switch draftStore.load() {
+        case .success(let text):
+            textView.text = text
+            refreshSubmitButton()
+            return true
+        case .failure:
+            refreshSubmitButton()
+            DispatchQueue.main.async { [weak self] in
+                self?.showStorageError()
+            }
+            return false
+        }
+    }
+
+    private func appendContent(_ content: String) {
+        guard !isFinishing && !content.isEmpty else { return }
+        let existing = textView.text ?? ""
+        var separator = "\n\n"
+        if existing.isEmpty || existing.hasSuffix("\n\n") {
+            separator = ""
+        } else if existing.hasSuffix("\n") {
+            separator = "\n"
+        }
+        textView.text = existing + separator + content
+        draftStore.scheduleSave(textView.text)
         refreshSubmitButton()
     }
+
+    private func sharedItemDidFinishLoading() {
+        pendingSharedItemCount = max(0, pendingSharedItemCount - 1)
+        if !isFinishing {
+            flushDraft()
+        }
+        refreshSubmitButton()
+    }
+
+    private func flushDraft() {
+        guard !isFinishing else { return }
+        if !draftStore.flush(textView.text ?? "") {
+            print("shorthand draft flush failed")
+        }
+    }
+
+    private func observeExtensionLifecycle() {
+        let names: [Notification.Name] = [
+            .NSExtensionHostWillResignActive,
+            .NSExtensionHostDidEnterBackground,
+        ]
+        for name in names {
+            let observer = NotificationCenter.default.addObserver(
+                forName: name, object: nil, queue: .main
+            ) { [weak self] _ in
+                self?.flushDraft()
+            }
+            lifecycleObservers.append(observer)
+        }
+    }
+
+    private func showStorageError() {
+        guard presentedViewController == nil else { return }
+        let alert = UIAlertController(
+            title: NSLocalizedString("shorthand_storage_error", comment: ""),
+            message: nil,
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .default))
+        present(alert, animated: true)
+    }
+
+    private func nextShorthandFileURL(in directoryURL: URL) -> URL {
+        var timestamp = Int64(Date().timeIntervalSince1970 * 1000)
+        var url = directoryURL.appendingPathComponent(String(timestamp) + ".md")
+        while FileManager.default.fileExists(atPath: url.path) {
+            timestamp += 1
+            url = directoryURL.appendingPathComponent(String(timestamp) + ".md")
+        }
+        return url
+    }
+}
+
+private enum ShorthandShareError: Error {
+    case appGroupUnavailable
+    case assetCollision
+    case invalidStagedAsset
+    case promotionFailed
+}
+
+private enum ShorthandAttachmentState {
+    case active
+    case submitting
+    case cancelled
 }
 
 /// 与主 App `ShorthandTextView` 行为一致：粘贴 HTML 时自动转 Markdown。
