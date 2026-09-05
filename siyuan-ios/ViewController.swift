@@ -52,6 +52,17 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   var keyboardEndFrame: CGRect?
   var isOrientationTransitioning = false
   var isDarkStyle = false
+  private var webViewLayoutFrame: CGRect {
+    // URL.path 会去掉目录末尾的斜杠，同时兼容目录入口和显式页面入口。
+    let path = ViewController.syWebView.url?.path ?? ""
+    let isMobilePage = path == "/stage/build/mobile" || path.hasPrefix("/stage/build/mobile/")
+    var frame = view.safeAreaLayoutGuide.layoutFrame
+    if isMobilePage {
+      // 顶部和左右由原生容器避让安全区，仅将移动页面延伸到屏幕底边。
+      frame.size.height = max(0, view.bounds.maxY - frame.minY)
+    }
+    return frame
+  }
   private var oidcAuthSession: ASWebAuthenticationSession?
   private static var pendingOIDCCallback: String?
   private static var oidcCallbackDelivering = false
@@ -135,9 +146,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
     // show keyboard
     ViewController.syWebView.scrollView.isScrollEnabled = false
-    if #available(iOS 26.0, *) {
-      ViewController.syWebView.scrollView.contentInsetAdjustmentBehavior = .never
-    }
+    ViewController.syWebView.scrollView.contentInsetAdjustmentBehavior = .never
     ViewController.syWebView.scrollView.delegate = self
     // boot 页与 index 的 #loading 蒙层背景恒为深色 #1e1e1e，故 webview 及其滚动视图底色
     // 也固定为深色，避免 HTML/CSS 渲染前露出默认白底。webview 内容（body 背景不透明）会
@@ -183,11 +192,16 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     super.viewDidLayoutSubviews()
     if #available(iOS 26.0, *) {
       updateWebViewFrame()
-    } else if ViewController.syWebView.frame.width != view.safeAreaLayoutGuide.layoutFrame.width
+    } else if ViewController.syWebView.frame.width != webViewLayoutFrame.width
       || !keyboardShowed
     {
-      ViewController.syWebView.frame = view.safeAreaLayoutGuide.layoutFrame
+      ViewController.syWebView.frame = webViewLayoutFrame
     }
+  }
+
+  override func viewSafeAreaInsetsDidChange() {
+    super.viewSafeAreaInsetsDidChange()
+    view.setNeedsLayout()
   }
 
   override func viewWillTransition(
@@ -450,23 +464,29 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
     keyboardShowed = true
     if GCKeyboard.coalesced != nil {
-      if ViewController.syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height {
-        ViewController.syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
+      if ViewController.syWebView.frame.size.height != webViewLayoutFrame.height {
+        ViewController.syWebView.frame.size.height = webViewLayoutFrame.height
       }
     } else {
       guard let userInfo = notification.userInfo else { return }
-      let endFrameRect = (userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?
-        .cgRectValue
-      if (endFrameRect?.origin.y ?? 0) >= UIScreen.main.bounds.size.height {
-        if ViewController.syWebView.frame.size.height != view.safeAreaLayoutGuide.layoutFrame.height
+      guard let endFrameRect = (userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?
+        .cgRectValue else { return }
+      let keyboardFrame = view.convert(endFrameRect, from: nil)
+      let intersection = view.bounds.intersection(keyboardFrame)
+      if intersection.isNull || intersection.height <= 0 {
+        keyboardShowed = false
+        if ViewController.syWebView.frame.size.height != webViewLayoutFrame.height
         {
-          ViewController.syWebView.frame.size.height = view.safeAreaLayoutGuide.layoutFrame.height
+          ViewController.syWebView.frame.size.height = webViewLayoutFrame.height
         }
         ViewController.syWebView.evaluateJavaScript("hideKeyboardToolbar()")
       } else {
-        let mainHeight =
-          view.safeAreaLayoutGuide.layoutFrame.height - (endFrameRect?.height ?? 0)
-          + view.safeAreaInsets.bottom
+        let layoutFrame = webViewLayoutFrame
+        let coversBottom = intersection.width >= view.bounds.width - 1
+          && intersection.maxY >= view.bounds.maxY - 1
+        let mainHeight = coversBottom
+          ? max(0, min(layoutFrame.height, keyboardFrame.minY - layoutFrame.minY))
+          : layoutFrame.height
         if ViewController.syWebView.frame.size.height != mainHeight {
           ViewController.syWebView.frame.size.height = mainHeight
         }
@@ -485,7 +505,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   private func updateWebViewFrame() {
     guard #available(iOS 26.0, *) else { return }
-    let webViewFrame = view.safeAreaLayoutGuide.layoutFrame
+    let webViewFrame = webViewLayoutFrame
     if ViewController.syWebView.frame != webViewFrame {
       ViewController.syWebView.frame = webViewFrame
     }
@@ -493,7 +513,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     if keyboardShowed && !isOrientationTransitioning, GCKeyboard.coalesced == nil,
       let keyboardEndFrame
     {
-      // WebView 保持完整安全区，通过遮挡 inset 调整网页布局，避免键盘与 frame 重复缩放。
+      // WebView 保持完整布局尺寸，键盘遮挡仅通过 inset 调整，避免重复缩放。
       let keyboardFrame = view.convert(keyboardEndFrame, from: nil)
       let intersection = view.bounds.intersection(keyboardFrame)
       if !intersection.isNull && intersection.maxY >= view.bounds.maxY - 1 {
@@ -569,8 +589,18 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     printWebView?.loadHTMLString(String(argument[1]), baseURL: nil)
   }
 
+  func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    if webView == ViewController.syWebView {
+      keyboardShowed = false
+      keyboardEndFrame = nil
+      view.setNeedsLayout()
+      view.layoutIfNeeded()
+    }
+  }
+
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     if webView == ViewController.syWebView {
+      view.setNeedsLayout()
       ViewController.flushOIDCCallback()
     }
     // 确保是我们用于打印的那个 webView 实例完成了加载
