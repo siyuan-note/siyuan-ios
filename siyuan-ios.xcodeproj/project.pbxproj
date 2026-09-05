@@ -27,6 +27,8 @@
 		A1B2C3D5E5F6222200020101 /* ShorthandLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020102 /* ShorthandLauncher.swift */; };
 		A1B2C3D5E5F6222200020201 /* ShorthandAppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020202 /* ShorthandAppShortcuts.swift */; };
 		A1B2C3D5E5F6222200020301 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020302 /* AppIntents.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		A1B2C3D5E5F6222200020401 /* ShorthandDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */; };
+		A1B2C3D5E5F6222200020403 /* ShorthandDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +82,7 @@
 		A1B2C3D5E5F6222200020102 /* ShorthandLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandLauncher.swift; sourceTree = "<group>"; };
 		A1B2C3D5E5F6222200020202 /* ShorthandAppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandAppShortcuts.swift; sourceTree = "<group>"; };
 		A1B2C3D5E5F6222200020302 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
+		A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/ShorthandDraftStore.swift; sourceTree = "<group>"; };
 		B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -122,6 +125,7 @@
 		268CE595275A68B400DFCFF8 = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */,
 				268CE5B5275A68F300DFCFF8 /* app */,
 				268CE5A0275A68B400DFCFF8 /* siyuan-ios */,
 				2674E06E2FB0BFF5007BADF5 /* ShorthandShare */,
@@ -284,6 +288,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1B2C3D5E5F6222200020403 /* ShorthandDraftStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -291,6 +296,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1B2C3D5E5F6222200020401 /* ShorthandDraftStore.swift in Sources */,
 				2675C37D2D8964E300421174 /* IAPManager.swift in Sources */,
 				268CE5A6275A68B400DFCFF8 /* ViewController.swift in Sources */,
 				2605291F443EB855AA534C4D /* ShorthandViewController.swift in Sources */,

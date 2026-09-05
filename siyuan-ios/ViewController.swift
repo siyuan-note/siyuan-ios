@@ -1,5 +1,5 @@
 /*
- * SiYuan - 源于思考，饮水思源
+ * SiYuan - From thought to insight, with agents
  * Copyright (c) 2020-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
@@ -66,6 +66,18 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   private var oidcAuthSession: ASWebAuthenticationSession?
   private static var pendingOIDCCallback: String?
   private static var oidcCallbackDelivering = false
+  private var bootProgressTask: URLSessionDataTask?
+  private var bootProgressMonitorActive = false
+  private var kernelBootCompleted = false
+  private var mainPageNavigationStarted = false
+  private var mainPageReady = false
+  private var webViewRecoveryScheduled = false
+  private var webViewRecoveryGeneration = 0
+  private var forceDefaultBootAppearance = false
+  private var bootWebView: WKWebView?
+  private var mainPageWatchdog: DispatchWorkItem?
+  private var mainPageWatchdogGeneration = 0
+  private static let mainPageLoadTimeout: TimeInterval = 30
 
   required init(coder: NSCoder) {
     super.init(coder: coder)!
@@ -78,6 +90,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   deinit {
     // make sure to remove the observer when this view controller is dismissed/deallocated
     NotificationCenter.default.removeObserver(self)
+    bootProgressMonitorActive = false
+    bootProgressTask?.cancel()
+    mainPageWatchdog?.cancel()
+    bootWebView?.stopLoading()
+    bootWebView?.navigationDelegate = nil
+    bootWebView?.removeFromSuperview()
   }
 
   func getAppVersion() -> String {
@@ -91,9 +109,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     super.viewDidLoad()
     cleanupStaleExportCache()
 
-    guard
-      let url = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=" + getAppVersion())
-    else {
+    guard let url = bootPageURL() else {
       return
     }
 
@@ -179,17 +195,21 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, selector: #selector(protectedDataDidBecomeUnavailable),
       name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
     waitFotKernelHttpServing()
-    ViewController.syWebView.load(URLRequest(url: url))
+    ViewController.syWebView.isHidden = true
+    view.addSubview(ViewController.syWebView)
+    loadBootPage(url)
+    startBootProgressMonitor()
     #if DEBUG
       if #available(iOS 16.4, *) {
         ViewController.syWebView.isInspectable = true
+        bootWebView?.isInspectable = true
       }
     #endif
-    view.addSubview(ViewController.syWebView)
   }
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
+    bootWebView?.frame = view.safeAreaLayoutGuide.layoutFrame
     if #available(iOS 26.0, *) {
       updateWebViewFrame()
     } else if ViewController.syWebView.frame.width != webViewLayoutFrame.width
@@ -343,31 +363,62 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
   ) {
-    let url = navigationAction.request.url
-    guard url != nil else {
-      print(url!)
+    guard let url = navigationAction.request.url else {
       decisionHandler(.allow)
       return
     }
 
-    if (url!.description.lowercased().starts(with: "http://127.0.0.1:6806/assets") == true
-      || url!.description.lowercased().starts(with: "http://127.0.0.1:6806/export") == true  // 导出 Data
-      || (url!.description.lowercased().starts(with: "http://127.0.0.1:6806") == false
+    if webView === bootWebView, navigationAction.targetFrame?.isMainFrame == true,
+      isLocalKernelURL(url), !url.path.contains("/appearance/boot/")
+    {
+      decisionHandler(.cancel)
+      bootProgressMonitorActive = false
+      bootProgressTask?.cancel()
+      bootProgressTask = nil
+      kernelBootCompleted = true
+      mainPageNavigationStarted = false
+      mainPageReady = false
+      navigateToMainPage()
+      return
+    }
+
+    if (url.description.lowercased().starts(with: "http://127.0.0.1:6806/assets") == true
+      || url.description.lowercased().starts(with: "http://127.0.0.1:6806/export") == true  // 导出 Data
+      || (url.description.lowercased().starts(with: "http://127.0.0.1:6806") == false
         && navigationAction.targetFrame?.request != nil
         && navigationAction.targetFrame?.request.url?.description.lowercased().starts(
           with: "http://127.0.0.1:6806") == true))
-      && UIApplication.shared.canOpenURL(url!)
+      && UIApplication.shared.canOpenURL(url)
     {
       decisionHandler(.cancel)
-      UIApplication.shared.open(url!, options: [:], completionHandler: nil)
+      UIApplication.shared.open(url, options: [:], completionHandler: nil)
     } else if navigationAction.navigationType == .linkActivated
-      && UIApplication.shared.canOpenURL(url!)
+      && UIApplication.shared.canOpenURL(url)
     {
       decisionHandler(.cancel)
-      UIApplication.shared.open(url!, options: [:], completionHandler: nil)
+      UIApplication.shared.open(url, options: [:], completionHandler: nil)
     } else {
       decisionHandler(.allow)
     }
+  }
+
+  func webView(
+    _ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+    decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
+  ) {
+    guard (webView == ViewController.syWebView || webView == bootWebView),
+      navigationResponse.isForMainFrame,
+      let response = navigationResponse.response as? HTTPURLResponse, response.statusCode >= 400
+    else {
+      decisionHandler(.allow)
+      return
+    }
+
+    decisionHandler(.cancel)
+    scheduleWebViewRecovery(
+      error: NSError(
+        domain: NSURLErrorDomain, code: response.statusCode,
+        userInfo: [NSLocalizedDescriptionKey: "HTTP \(response.statusCode)"]))
   }
 
   func initKernel() {
@@ -376,6 +427,209 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       "ios", Bundle.main.resourcePath, urls[0].path, TimeZone.current.identifier, getIP(),
       Locale.preferredLanguages[0].prefix(2) == "zh" ? "zh-CN" : "en",
       UIDevice.current.systemVersion)
+  }
+
+  private func bootPageURL() -> URL? {
+    let safeParameter = forceDefaultBootAppearance ? "&appearance=0" : ""
+    return URL(
+      string: "http://127.0.0.1:6806/appearance/boot/index.html?v=" + getAppVersion()
+        + safeParameter)
+  }
+
+  private func loadBootPage(_ url: URL? = nil) {
+    guard let url = url ?? bootPageURL() else {
+      return
+    }
+    mainPageNavigationStarted = false
+    mainPageReady = false
+
+    let webView: WKWebView
+    if let currentBootWebView = bootWebView {
+      webView = currentBootWebView
+    } else {
+      let configuration = WKWebViewConfiguration()
+      configuration.allowsInlineMediaPlayback = true
+      configuration.mediaTypesRequiringUserActionForPlayback = []
+      configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+      webView = WKWebView(frame: view.safeAreaLayoutGuide.layoutFrame, configuration: configuration)
+      webView.customUserAgent = ViewController.syWebView.customUserAgent
+      webView.navigationDelegate = self
+      webView.scrollView.isScrollEnabled = false
+      webView.isUserInteractionEnabled = false
+      webView.isOpaque = false
+      webView.backgroundColor = view.backgroundColor
+      webView.scrollView.backgroundColor = view.backgroundColor
+      bootWebView = webView
+      view.addSubview(webView)
+    }
+
+    webView.load(URLRequest(url: url))
+  }
+
+  private func removeBootWebView() {
+    bootWebView?.stopLoading()
+    bootWebView?.navigationDelegate = nil
+    bootWebView?.removeFromSuperview()
+    bootWebView = nil
+  }
+
+  private func startBootProgressMonitor() {
+    guard !kernelBootCompleted else {
+      navigateToMainPage()
+      return
+    }
+    guard !bootProgressMonitorActive else {
+      return
+    }
+    bootProgressMonitorActive = true
+    pollBootProgress()
+  }
+
+  private func pollBootProgress() {
+    guard bootProgressMonitorActive,
+      let url = URL(string: "http://127.0.0.1:6806/api/system/bootProgress")
+    else {
+      return
+    }
+
+    var request = URLRequest(url: url)
+    request.cachePolicy = .reloadIgnoringLocalCacheData
+    request.timeoutInterval = 1
+    bootProgressTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, _ in
+      var completed = false
+      if let response = response as? HTTPURLResponse, response.statusCode == 200, let data = data,
+        let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let progressData = result["data"] as? [String: Any],
+        let progress = progressData["progress"] as? NSNumber
+      {
+        completed = progress.intValue >= 100
+      }
+
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self, self.bootProgressMonitorActive else {
+          return
+        }
+        if completed {
+          self.bootProgressMonitorActive = false
+          self.bootProgressTask = nil
+          self.kernelBootCompleted = true
+          self.navigateToMainPage()
+          return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+          self?.pollBootProgress()
+        }
+      }
+    }
+    bootProgressTask?.resume()
+  }
+
+  private func navigateToMainPage() {
+    guard kernelBootCompleted else {
+      return
+    }
+    scheduleMainPageWatchdog()
+    if mainPageReady {
+      mainPageNavigationStarted = true
+      ViewController.syWebView.isHidden = false
+      cancelMainPageWatchdog()
+      return
+    }
+    guard !mainPageNavigationStarted,
+      let url = URL(string: "http://127.0.0.1:6806/")
+    else {
+      return
+    }
+
+    mainPageNavigationStarted = true
+    mainPageReady = false
+    forceDefaultBootAppearance = false
+    ViewController.syWebView.isHidden = false
+    ViewController.syWebView.load(URLRequest(url: url))
+  }
+
+  private func isReadyMainPage(_ url: URL?) -> Bool {
+    guard let url = url, isLocalKernelURL(url) else {
+      return false
+    }
+    return url.path.contains("/stage/build/") || url.path.contains("/check-auth")
+  }
+
+  private func isLocalKernelURL(_ url: URL) -> Bool {
+    return url.scheme == "http" && url.host == "127.0.0.1" && url.port == 6806
+  }
+
+  private func scheduleMainPageWatchdog() {
+    guard kernelBootCompleted else {
+      return
+    }
+    cancelMainPageWatchdog()
+    let generation = mainPageWatchdogGeneration
+    let watchdog = DispatchWorkItem { [weak self] in
+      guard let self = self, self.kernelBootCompleted,
+        self.mainPageWatchdogGeneration == generation
+      else {
+        return
+      }
+      if self.mainPageReady {
+        ViewController.syWebView.isHidden = false
+        self.cancelMainPageWatchdog()
+        return
+      }
+
+      print("Main page load timed out, reload it")
+      ViewController.syWebView.stopLoading()
+      self.mainPageNavigationStarted = false
+      self.navigateToMainPage()
+    }
+    mainPageWatchdog = watchdog
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + ViewController.mainPageLoadTimeout, execute: watchdog)
+  }
+
+  private func cancelMainPageWatchdog() {
+    mainPageWatchdogGeneration += 1
+    mainPageWatchdog?.cancel()
+    mainPageWatchdog = nil
+  }
+
+  private func scheduleWebViewRecovery(error: Error? = nil) {
+    if let error = error {
+      let nsError = error as NSError
+      if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
+        return
+      }
+    }
+    guard !webViewRecoveryScheduled else {
+      return
+    }
+    mainPageReady = false
+    webViewRecoveryScheduled = true
+    webViewRecoveryGeneration += 1
+    let generation = webViewRecoveryGeneration
+    if let error = error {
+      print("Web view navigation failed: \(error.localizedDescription)")
+    }
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+      guard let self = self, self.webViewRecoveryGeneration == generation else {
+        return
+      }
+      self.webViewRecoveryScheduled = false
+      if self.kernelBootCompleted {
+        self.mainPageNavigationStarted = false
+        self.navigateToMainPage()
+      } else {
+        self.forceDefaultBootAppearance = true
+        self.loadBootPage()
+        self.startBootProgressMonitor()
+      }
+    }
+  }
+
+  private func cancelWebViewRecovery() {
+    webViewRecoveryGeneration += 1
+    webViewRecoveryScheduled = false
   }
 
   func waitFotKernelHttpServing() {
@@ -598,15 +852,84 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
   }
 
+  func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+    guard let url = webView.url,
+      isLocalKernelURL(url), !url.path.contains("/appearance/boot/")
+    else {
+      return
+    }
+    if webView == bootWebView {
+      bootProgressMonitorActive = false
+      bootProgressTask?.cancel()
+      bootProgressTask = nil
+      kernelBootCompleted = true
+      mainPageNavigationStarted = false
+      mainPageReady = false
+      navigateToMainPage()
+    } else if webView == ViewController.syWebView {
+      mainPageNavigationStarted = true
+      mainPageReady = false
+    }
+  }
+
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-    if webView == ViewController.syWebView {
+    if webView == bootWebView {
+      cancelWebViewRecovery()
+      if let url = webView.url, isLocalKernelURL(url),
+        !url.path.contains("/appearance/boot/")
+      {
+        bootProgressMonitorActive = false
+        bootProgressTask?.cancel()
+        bootProgressTask = nil
+        kernelBootCompleted = true
+        mainPageNavigationStarted = false
+        navigateToMainPage()
+      }
+    } else if webView == ViewController.syWebView {
       view.setNeedsLayout()
+      cancelWebViewRecovery()
+      if isReadyMainPage(webView.url) {
+        bootProgressMonitorActive = false
+        bootProgressTask?.cancel()
+        bootProgressTask = nil
+        kernelBootCompleted = true
+        mainPageNavigationStarted = true
+        mainPageReady = true
+        forceDefaultBootAppearance = false
+        cancelMainPageWatchdog()
+        removeBootWebView()
+      }
       ViewController.flushOIDCCallback()
     }
     // 确保是我们用于打印的那个 webView 实例完成了加载
     if webView == self.printWebView {
       initiatePrintInteraction()
     }
+  }
+
+  func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    if webView == ViewController.syWebView || webView == bootWebView {
+      scheduleWebViewRecovery(error: error)
+    }
+  }
+
+  func webView(
+    _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!,
+    withError error: Error
+  ) {
+    if webView == ViewController.syWebView || webView == bootWebView {
+      scheduleWebViewRecovery(error: error)
+    }
+  }
+
+  func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    guard webView == ViewController.syWebView || webView == bootWebView else {
+      return
+    }
+    forceDefaultBootAppearance = !kernelBootCompleted
+    mainPageNavigationStarted = false
+    mainPageReady = false
+    scheduleWebViewRecovery()
   }
 
   private func initiatePrintInteraction() {

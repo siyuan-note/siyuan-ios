@@ -1,4 +1,6 @@
 "shorthand_placeholder" = "Enter text and submit. Content will be saved to Settings - Document - Default shorthand save path";
 "shorthand_label" = "Flash Shorthand";
+"shorthand_storage_error" = "Unable to save the shorthand. Please try again.";
 "Submit" = "Submit";
 "Cancel" = "Cancel";
+"OK" = "OK";

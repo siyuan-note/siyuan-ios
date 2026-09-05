@@ -1,4 +1,6 @@
 "shorthand_placeholder" = "请输入文本，提交后内容将被保存到 设置 - 文档 - 新建闪念速记的默认存放路径 下";
 "shorthand_label" = "闪念速记";
+"shorthand_storage_error" = "无法保存闪念速记，请重试。";
 "Submit" = "提交";
 "Cancel" = "取消";
+"OK" = "确定";

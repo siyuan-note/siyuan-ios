@@ -1,5 +1,5 @@
 /*
- * SiYuan - 源于思考，饮水思源
+ * SiYuan - From thought to insight, with agents
  * Copyright (c) 2020-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,11 +20,15 @@ import UIKit
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
+  private static let shorthandMoveQueue = DispatchQueue(label: "com.ld246.siyuan.shorthand-move")
+
   var window: UIWindow?
   private var shorthandVC: ShorthandViewController?
   /// 闪念冷启动（root VC）后置位：豁免随后的 sceneDidBecomeActive 恢复主界面兜底，
   /// 让用户这次确实停留在闪念。仅在 scene(_:willConnectTo:) 的闪念冷启动分支置位。
   private var pendingShorthandShortcut = false
+  private var hasPendingShorthandRequest = false
+  private var pendingShorthandText = ""
 
   func scene(
     _ scene: UIScene, willConnectTo session: UISceneSession,
@@ -43,8 +47,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
           ViewController.handleOIDCCallback(context.url)
         } else if !(context.url.scheme == "siyuan" && context.url.host == "shorthand") {
           DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-            ViewController.syWebView.evaluateJavaScript(
-              "openFileByURL('" + context.url.absoluteString + "')")
+            guard let encoded = try? JSONEncoder().encode(context.url.absoluteString),
+              let argument = String(data: encoded, encoding: .utf8)
+            else {
+              return
+            }
+            ViewController.syWebView.evaluateJavaScript("openFileByURL(\(argument))")
           }
         }
       }
@@ -54,6 +62,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // Shorthand launch: replace root VC before ViewController.viewDidLoad fires
     let vc = ShorthandViewController()
     shorthandVC = vc
+    configureShorthandFinish(vc)
     for context in connectionOptions.urlContexts {
       if context.url.scheme == "siyuan" && context.url.host == "shorthand",
         let text = context.url.query?.removingPercentEncoding
@@ -79,7 +88,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         ViewController.handleOIDCCallback(url)
       } else {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-          ViewController.syWebView.evaluateJavaScript("openFileByURL('" + url.absoluteString + "')")
+          guard let encoded = try? JSONEncoder().encode(url.absoluteString),
+            let argument = String(data: encoded, encoding: .utf8)
+          else {
+            return
+          }
+          ViewController.syWebView.evaluateJavaScript("openFileByURL(\(argument))")
         }
       }
     }
@@ -91,16 +105,39 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   }
 
   private func presentShorthand(text: String? = nil) {
-    guard let rootVC = window?.rootViewController else { return }
+    guard let rootVC = window?.rootViewController else {
+      enqueueShorthandRequest(text)
+      return
+    }
+    guard window?.windowScene?.activationState == .foregroundActive else {
+      enqueueShorthandRequest(text)
+      return
+    }
+    if hasPendingShorthandRequest {
+      enqueueShorthandRequest(text)
+      if let root = rootVC as? ShorthandViewController, root.isCompleting {
+        replaceCompletedShorthandRoot()
+      } else {
+        replayPendingShorthandRequest()
+      }
+      return
+    }
 
     if let shorthandRoot = rootVC as? ShorthandViewController {
-      if let t = text, !t.isEmpty {
+      if shorthandRoot.isCompleting {
+        enqueueShorthandRequest(text)
+        replaceCompletedShorthandRoot()
+      } else if let t = text, !t.isEmpty {
         shorthandRoot.appendText(t)
       }
       return
     }
 
     if let existing = shorthandVC {
+      if existing.isCompleting {
+        enqueueShorthandRequest(text)
+        return
+      }
       if let t = text, !t.isEmpty {
         existing.appendText(t)
       }
@@ -113,6 +150,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     let vc = ShorthandViewController()
     shorthandVC = vc
+    configureShorthandFinish(vc)
 
     if let t = text, !t.isEmpty {
       vc.appendText(t)
@@ -131,11 +169,71 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     activity.becomeCurrent()
   }
 
+  private func configureShorthandFinish(_ viewController: ShorthandViewController) {
+    viewController.onFinish = { [weak self, weak viewController] in
+      guard let self = self, let viewController = viewController else { return }
+      if self.shorthandVC === viewController {
+        self.shorthandVC = nil
+      }
+      self.replayPendingShorthandRequest()
+    }
+  }
+
+  private func enqueueShorthandRequest(_ text: String?) {
+    hasPendingShorthandRequest = true
+    guard let text = text, !text.isEmpty else { return }
+    pendingShorthandText = joinShorthandContent(pendingShorthandText, text)
+  }
+
+  private func consumeShorthandRequest() -> String? {
+    guard hasPendingShorthandRequest else { return nil }
+    let text = pendingShorthandText
+    hasPendingShorthandRequest = false
+    pendingShorthandText = ""
+    return text.isEmpty ? nil : text
+  }
+
+  private func replayPendingShorthandRequest() {
+    guard hasPendingShorthandRequest else { return }
+    guard window?.windowScene?.activationState == .foregroundActive else { return }
+    let text = consumeShorthandRequest()
+    presentShorthand(text: text)
+  }
+
+  private func replaceCompletedShorthandRoot() {
+    guard hasPendingShorthandRequest else { return }
+    guard let root = window?.rootViewController as? ShorthandViewController,
+      root.isCompleting
+    else {
+      return
+    }
+    let text = consumeShorthandRequest()
+    let viewController = ShorthandViewController()
+    shorthandVC = viewController
+    configureShorthandFinish(viewController)
+    if let text = text {
+      viewController.appendText(text)
+    }
+    window?.rootViewController = viewController
+  }
+
+  private func joinShorthandContent(_ existing: String, _ incoming: String) -> String {
+    guard !existing.isEmpty else { return incoming }
+    if existing.hasSuffix("\n\n") {
+      return existing + incoming
+    }
+    if existing.hasSuffix("\n") {
+      return existing + "\n" + incoming
+    }
+    return existing + "\n\n" + incoming
+  }
+
   func sceneDidDisconnect(_ scene: UIScene) {
     // Called as the scene is being released by the system.
     // This occurs shortly after the scene enters the background, or when its session is discarded.
     // Release any resources associated with this scene that can be re-created the next time the scene connects.
     // The scene may re-connect later, as its session was not necessarily discarded (see `application:didDiscardSceneSessions` instead).
+    flushShorthandDraft()
     NotificationCenter.default.removeObserver(
       self, name: ShorthandViewController.didSubmitAsRootNotification, object: nil)
   }
@@ -158,14 +256,25 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
   func sceneDidBecomeActive(_ scene: UIScene) {
     LANSyncBonjour.shared.start()
+    let keepShorthandRoot = pendingShorthandShortcut
+    pendingShorthandShortcut = false
     // App Intent（iOS 16+ 快捷指令/Siri，见 ShorthandAppShortcuts）入队的闪念请求：
     if let text = ShorthandLauncher.consume() {
       presentShorthand(text: text.isEmpty ? nil : text)
       return
     }
-    if pendingShorthandShortcut {
+    if hasPendingShorthandRequest {
+      if let root = window?.rootViewController as? ShorthandViewController,
+        root.isCompleting
+      {
+        replaceCompletedShorthandRoot()
+      } else {
+        replayPendingShorthandRequest()
+      }
+      return
+    }
+    if keepShorthandRoot {
       // 本次激活由闪念快捷方式触发，用户确实要进闪念，跳过恢复
-      pendingShorthandShortcut = false
       return
     }
     // 兜底：点 App 图标等非闪念入口激活时，若 root 仍是闪念则恢复主界面。
@@ -178,10 +287,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   func sceneWillResignActive(_ scene: UIScene) {
     // Called when the scene will move from an active state to an inactive state.
     // This may occur due to temporary interruptions (ex. an incoming phone call).
+    flushShorthandDraft()
   }
 
   func sceneWillEnterForeground(_ scene: UIScene) {
-    moveSharedShorthands()
+    Self.shorthandMoveQueue.async { [weak self] in
+      self?.moveSharedShorthands()
+    }
   }
 
   func windowScene(
@@ -207,47 +319,153 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     else {
       return
     }
-    let sharedDir = containerURL.path + "/home/.config/siyuan/shortcuts/shorthands/"
+    let sharedDirectoryURL = containerURL.appendingPathComponent(
+      "home/.config/siyuan/shortcuts/shorthands", isDirectory: true)
     let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-    let targetDir = urls[0].path + "/home/.config/siyuan/shortcuts/shorthands/"
+    let targetDirectoryURL = urls[0].appendingPathComponent(
+      "home/.config/siyuan/shortcuts/shorthands", isDirectory: true)
 
     let fm = FileManager.default
-    guard fm.fileExists(atPath: sharedDir) else { return }
+    guard fm.fileExists(atPath: sharedDirectoryURL.path) else { return }
 
-    try? fm.createDirectory(atPath: targetDir, withIntermediateDirectories: true, attributes: nil)
-
-    guard let entries = try? fm.contentsOfDirectory(atPath: sharedDir) else { return }
-    for entry in entries {
-      let src = sharedDir + entry
-      let dst = targetDir + entry
-      var isDir: ObjCBool = false
-      if fm.fileExists(atPath: src, isDirectory: &isDir), isDir.boolValue {
-        try? fm.createDirectory(atPath: dst, withIntermediateDirectories: true, attributes: nil)
-        if let subEntries = try? fm.contentsOfDirectory(atPath: src) {
-          for subEntry in subEntries {
-            let subSrc = src + "/" + subEntry
-            let subDst = dst + "/" + subEntry
-            if fm.fileExists(atPath: subDst) {
-              try? fm.removeItem(atPath: subDst)
-            }
-            try? fm.moveItem(atPath: subSrc, toPath: subDst)
-          }
-        }
-        try? fm.removeItem(atPath: src)
-      } else {
-        if fm.fileExists(atPath: dst) {
-          try? fm.removeItem(atPath: dst)
-        }
-        try? fm.moveItem(atPath: src, toPath: dst)
-      }
+    do {
+      try fm.createDirectory(
+        at: targetDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+    } catch {
+      print("create shorthand directory failed: \(error)")
+      return
     }
-    try? fm.removeItem(atPath: sharedDir)
+
+    let markdownURLs: [URL]
+    do {
+      markdownURLs = try fm.contentsOfDirectory(
+        at: sharedDirectoryURL, includingPropertiesForKeys: [.isRegularFileKey]
+      ).filter { $0.pathExtension == "md" }
+    } catch {
+      print("list shared shorthands failed: \(error)")
+      return
+    }
+
+    let sharedAssetsURL = sharedDirectoryURL.appendingPathComponent("assets", isDirectory: true)
+    let targetAssetsURL = targetDirectoryURL.appendingPathComponent("assets", isDirectory: true)
+    if fm.fileExists(atPath: sharedAssetsURL.path),
+      !copySharedAssets(from: sharedAssetsURL, to: targetAssetsURL)
+    {
+      return
+    }
+
+    do {
+      for sourceURL in markdownURLs {
+        guard fm.fileExists(atPath: sourceURL.path) else { continue }
+        guard try sourceURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else {
+          print("unsupported shared shorthand file: \(sourceURL.lastPathComponent)")
+          continue
+        }
+        let targetURL = nextSharedShorthandURL(
+          for: sourceURL, in: targetDirectoryURL, sharedDirectoryURL: sharedDirectoryURL)
+        try fm.moveItem(at: sourceURL, to: targetURL)
+      }
+      removeDirectoryIfEmpty(sharedAssetsURL)
+      removeDirectoryIfEmpty(sharedDirectoryURL)
+    } catch {
+      print("move shared shorthand failed: \(error)")
+    }
+  }
+
+  private func copySharedAssets(from sourceDirectoryURL: URL, to targetDirectoryURL: URL) -> Bool {
+    let fm = FileManager.default
+    do {
+      try fm.createDirectory(
+        at: targetDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+      let targetEntries = try fm.contentsOfDirectory(
+        at: targetDirectoryURL, includingPropertiesForKeys: nil)
+      for url in targetEntries where url.lastPathComponent.hasPrefix(".shorthand-partial-") {
+        try fm.removeItem(at: url)
+      }
+
+      let sourceURLs = try fm.contentsOfDirectory(
+        at: sourceDirectoryURL, includingPropertiesForKeys: [.isRegularFileKey])
+      for sourceURL in sourceURLs {
+        if sourceURL.lastPathComponent.hasPrefix(".shorthand-partial-") {
+          continue
+        }
+        guard try sourceURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else {
+          print("unsupported shared shorthand asset: \(sourceURL.lastPathComponent)")
+          return false
+        }
+        let targetURL = targetDirectoryURL.appendingPathComponent(sourceURL.lastPathComponent)
+        if fm.fileExists(atPath: targetURL.path) {
+          guard fm.contentsEqual(atPath: sourceURL.path, andPath: targetURL.path) else {
+            print("shared shorthand asset collision: \(sourceURL.lastPathComponent)")
+            return false
+          }
+          try fm.removeItem(at: sourceURL)
+          continue
+        }
+
+        let partialURL = targetDirectoryURL.appendingPathComponent(
+          ".shorthand-partial-" + UUID().uuidString)
+        do {
+          try fm.copyItem(at: sourceURL, to: partialURL)
+          try fm.moveItem(at: partialURL, to: targetURL)
+          try fm.removeItem(at: sourceURL)
+        } catch {
+          try? fm.removeItem(at: partialURL)
+          throw error
+        }
+      }
+      removeDirectoryIfEmpty(sourceDirectoryURL)
+      return true
+    } catch {
+      print("move shared shorthand assets failed: \(error)")
+      return false
+    }
+  }
+
+  private func nextSharedShorthandURL(
+    for sourceURL: URL, in targetDirectoryURL: URL, sharedDirectoryURL: URL
+  ) -> URL {
+    let fm = FileManager.default
+    var timestamp = Int64(sourceURL.deletingPathExtension().lastPathComponent)
+      ?? Int64(Date().timeIntervalSince1970 * 1000)
+    var fileName = String(timestamp) + ".md"
+    var targetURL = targetDirectoryURL.appendingPathComponent(fileName)
+    var sharedURL = sharedDirectoryURL.appendingPathComponent(fileName)
+    while fm.fileExists(atPath: targetURL.path)
+      || (sharedURL != sourceURL && fm.fileExists(atPath: sharedURL.path))
+    {
+      timestamp += 1
+      fileName = String(timestamp) + ".md"
+      targetURL = targetDirectoryURL.appendingPathComponent(fileName)
+      sharedURL = sharedDirectoryURL.appendingPathComponent(fileName)
+    }
+    return targetURL
+  }
+
+  private func removeDirectoryIfEmpty(_ directoryURL: URL) {
+    let fm = FileManager.default
+    do {
+      guard fm.fileExists(atPath: directoryURL.path) else { return }
+      guard try fm.contentsOfDirectory(atPath: directoryURL.path).isEmpty else { return }
+      try fm.removeItem(at: directoryURL)
+    } catch {
+      print("remove empty shorthand directory failed: \(error)")
+    }
   }
 
   func sceneDidEnterBackground(_ scene: UIScene) {
     LANSyncBonjour.shared.stop()
+    flushShorthandDraft()
     guard !(window?.rootViewController is ShorthandViewController) else { return }
     ViewController.syWebView.evaluateJavaScript("lockscreenByMode();")
+  }
+
+  private func flushShorthandDraft() {
+    let rootShorthand = window?.rootViewController as? ShorthandViewController
+    rootShorthand?.flushDraft()
+    if let shorthandVC = shorthandVC, shorthandVC !== rootShorthand {
+      shorthandVC.flushDraft()
+    }
   }
 
 }
