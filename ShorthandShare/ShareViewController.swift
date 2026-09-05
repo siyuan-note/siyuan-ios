@@ -198,7 +198,7 @@ class ShareViewController: UIViewController, UITextViewDelegate {
     }
 
     private func loadURL(from provider: NSItemProvider, completion: @escaping () -> Void) {
-        let progress = provider.loadItem(
+        provider.loadItem(
             forTypeIdentifier: UTType.url.identifier, options: nil
         ) { [weak self] (item, error) in
             guard let self = self, let url = item as? URL else {
@@ -215,11 +215,10 @@ class ShareViewController: UIViewController, UITextViewDelegate {
                 completion()
             }
         }
-        loadingProgresses.append(progress)
     }
 
     private func loadText(from provider: NSItemProvider, completion: @escaping () -> Void) {
-        let progress = provider.loadItem(
+        provider.loadItem(
             forTypeIdentifier: UTType.plainText.identifier, options: nil
         ) { [weak self] (text, error) in
             guard let self = self, let text = text as? String else {
@@ -231,11 +230,10 @@ class ShareViewController: UIViewController, UITextViewDelegate {
                 completion()
             }
         }
-        loadingProgresses.append(progress)
     }
 
     private func loadHtml(from provider: NSItemProvider, completion: @escaping () -> Void) {
-        let progress = provider.loadItem(
+        provider.loadItem(
             forTypeIdentifier: UTType.html.identifier, options: nil
         ) { [weak self] (html, error) in
             guard let self = self, let html = html as? String else {
@@ -248,7 +246,6 @@ class ShareViewController: UIViewController, UITextViewDelegate {
                 completion()
             }
         }
-        loadingProgresses.append(progress)
     }
 
     private func loadFile(

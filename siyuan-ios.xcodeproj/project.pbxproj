@@ -82,7 +82,7 @@
 		A1B2C3D5E5F6222200020102 /* ShorthandLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandLauncher.swift; sourceTree = "<group>"; };
 		A1B2C3D5E5F6222200020202 /* ShorthandAppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandAppShortcuts.swift; sourceTree = "<group>"; };
 		A1B2C3D5E5F6222200020302 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
-		A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/ShorthandDraftStore.swift; sourceTree = "<group>"; };
+		A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandDraftStore.swift; sourceTree = "<group>"; };
 		B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -125,13 +125,21 @@
 		268CE595275A68B400DFCFF8 = {
 			isa = PBXGroup;
 			children = (
-				A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */,
 				268CE5B5275A68F300DFCFF8 /* app */,
 				268CE5A0275A68B400DFCFF8 /* siyuan-ios */,
 				2674E06E2FB0BFF5007BADF5 /* ShorthandShare */,
+				A1B2C3D5E5F6222200020404 /* Shared */,
 				268CE59F275A68B400DFCFF8 /* Products */,
 				268CE5B7275A69E800DFCFF8 /* Frameworks */,
 			);
+			sourceTree = "<group>";
+		};
+		A1B2C3D5E5F6222200020404 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		268CE59F275A68B400DFCFF8 /* Products */ = {
