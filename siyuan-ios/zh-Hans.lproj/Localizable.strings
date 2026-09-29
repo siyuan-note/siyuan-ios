@@ -2,6 +2,8 @@
 "shorthand_label" = "闪念速记";
 "shorthand_storage_error" = "无法保存闪念速记，请重试。";
 "Submit" = "提交";
+"Saved" = "✓";
+"SavedAccessibility" = "已保存";
 "Cancel" = "取消";
 "OK" = "确定";
 "shorthand_intent_description" = "打开思源笔记闪念速记，记录一条速记";

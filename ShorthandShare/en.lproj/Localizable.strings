@@ -2,5 +2,7 @@
 "shorthand_label" = "Flash Shorthand";
 "shorthand_storage_error" = "Unable to save the shorthand. Please try again.";
 "Submit" = "Submit";
+"Saved" = "✓";
+"SavedAccessibility" = "Saved";
 "Cancel" = "Cancel";
 "OK" = "OK";

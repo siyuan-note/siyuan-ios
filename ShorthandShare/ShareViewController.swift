@@ -336,7 +336,10 @@ class ShareViewController: UIViewController, UITextViewDelegate {
             self.removeStagedAttachments()
             DispatchQueue.main.async {
                 self.textView.text = ""
-                self.dismissExtension()
+                self.placeholderLabel.isHidden = false
+                self.showSavedFeedback { [weak self] in
+                    self?.dismissExtension()
+                }
             }
         }
     }
@@ -370,6 +373,31 @@ class ShareViewController: UIViewController, UITextViewDelegate {
 
     private func dismissExtension() {
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+    }
+
+    private func showSavedFeedback(completion: @escaping () -> Void) {
+        let savedText = NSLocalizedString("Saved", comment: "")
+        let savedAccessibilityText = NSLocalizedString("SavedAccessibility", comment: "")
+        UIView.transition(with: submitButton, duration: 0.18, options: .transitionCrossDissolve) {
+            var configuration = self.submitButton.configuration
+            configuration?.title = savedText
+            self.submitButton.configuration = configuration
+            self.submitButton.accessibilityLabel = savedAccessibilityText
+            self.submitButton.backgroundColor = .systemBlue
+        }
+        submitButton.transform = CGAffineTransform(scaleX: 0.88, y: 0.88)
+        UIView.animate(
+            withDuration: 0.22,
+            delay: 0,
+            usingSpringWithDamping: 0.55,
+            initialSpringVelocity: 0.4,
+            options: [.beginFromCurrentState]) {
+                self.submitButton.transform = .identity
+            }
+        UIAccessibility.post(notification: .announcement, argument: savedAccessibilityText)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            completion()
+        }
     }
 
     /// 分享扩展进程的 Documents 落不到主 App 容器，故写入 App Group 共享容器，

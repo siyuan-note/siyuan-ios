@@ -197,8 +197,34 @@ class ShorthandViewController: UIViewController {
     textView.text = ""
     placeholderLabel.isHidden = false
     refreshSubmitButton()
+    showSavedFeedback { [weak self] in
+      self?.exitShorthand()
+    }
+  }
 
-    exitShorthand()
+  private func showSavedFeedback(completion: @escaping () -> Void) {
+    let savedText = NSLocalizedString("Saved", comment: "")
+    let savedAccessibilityText = NSLocalizedString("SavedAccessibility", comment: "")
+    UIView.transition(with: submitButton, duration: 0.18, options: .transitionCrossDissolve) {
+      var configuration = self.submitButton.configuration
+      configuration?.title = savedText
+      self.submitButton.configuration = configuration
+      self.submitButton.accessibilityLabel = savedAccessibilityText
+      self.submitButton.backgroundColor = .systemBlue
+    }
+    submitButton.transform = CGAffineTransform(scaleX: 0.88, y: 0.88)
+    UIView.animate(
+      withDuration: 0.22,
+      delay: 0,
+      usingSpringWithDamping: 0.55,
+      initialSpringVelocity: 0.4,
+      options: [.beginFromCurrentState]) {
+        self.submitButton.transform = .identity
+      }
+    UIAccessibility.post(notification: .announcement, argument: savedAccessibilityText)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+      completion()
+    }
   }
 
   /// 取消：不保存，关闭闪念。
