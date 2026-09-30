@@ -18,15 +18,20 @@
 
 import Iosk
 import Network
+import OnnxRuntimeBindings
 import UIKit
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
+  private var ocrRuntime: ORTEnv?
+
   func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // 强引用静态运行时，使独立内核可以通过 C 接口创建自己的推理会话。
+    ocrRuntime = try? ORTEnv(loggingLevel: .warning)
     // Override point for customization after application launch.
     // 设置通知代理
     UNUserNotificationCenter.current().delegate = self
