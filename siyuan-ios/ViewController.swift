@@ -443,6 +443,14 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       return
     }
 
+    if webView === ViewController.syWebView, navigationAction.shouldPerformDownload,
+      let assetPath = localAssetDownloadPath(url)
+    {
+      decisionHandler(.cancel)
+      saveExportFile(uri: assetPath, requestID: "")
+      return
+    }
+
     if webView === bootWebView, navigationAction.targetFrame?.isMainFrame == true,
       isLocalKernelURL(url), !url.path.contains("/appearance/boot/")
     {
@@ -481,6 +489,18 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     _ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
   ) {
+    if webView === ViewController.syWebView,
+      let response = navigationResponse.response as? HTTPURLResponse,
+      (200..<300).contains(response.statusCode),
+      response.value(forHTTPHeaderField: "Content-Disposition")?.lowercased()
+        .hasPrefix("attachment") == true,
+      let url = response.url, let assetPath = localAssetDownloadPath(url)
+    {
+      decisionHandler(.cancel)
+      saveExportFile(uri: assetPath, requestID: "")
+      return
+    }
+
     guard (webView == ViewController.syWebView || webView == bootWebView),
       navigationResponse.isForMainFrame,
       let response = navigationResponse.response as? HTTPURLResponse, response.statusCode >= 400
@@ -637,6 +657,19 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   private func isLocalKernelURL(_ url: URL) -> Bool {
     return url.scheme == "http" && url.host == "127.0.0.1" && url.port == 6806
+  }
+
+  // 保留资源路径编码和笔记本参数，供现有导出租约解析。
+  private func localAssetDownloadPath(_ url: URL) -> String? {
+    guard isLocalKernelURL(url), url.user == nil, url.password == nil,
+      let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      components.percentEncodedPath.hasPrefix("/assets/"),
+      components.percentEncodedPath.count > "/assets/".count
+    else {
+      return nil
+    }
+    let path = String(components.percentEncodedPath.dropFirst())
+    return path + (components.percentEncodedQuery.map { "?" + $0 } ?? "")
   }
 
   private func scheduleMainPageWatchdog() {
