@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A19984000000000000000001 /* onnxruntime in Frameworks */ = {isa = PBXBuildFile; productRef = A19984000000000000000002 /* onnxruntime */; };
+		A19984000000000000000004 /* onnxruntime in Frameworks */ = {isa = PBXBuildFile; productRef = A19984000000000000000005 /* onnxruntime */; };
 		004F1B3C2F2FF46D006B27B5 /* logo.icon in Resources */ = {isa = PBXBuildFile; fileRef = 004F1B3B2F2FF46D006B27B5 /* logo.icon */; };
 		2605291F443EB855AA534C4D /* ShorthandViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */; };
 		261A2E192D1A5DE100451540 /* libresolv.9.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 261A2E182D1A5DC900451540 /* libresolv.9.tbd */; };
@@ -106,6 +107,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A19984000000000000000004 /* onnxruntime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -199,6 +201,7 @@
 			);
 			name = ShorthandShare;
 			packageProductDependencies = (
+				A19984000000000000000005 /* onnxruntime */,
 			);
 			productName = ShorthandShare;
 			productReference = 2674E06D2FB0BFF5007BADF5 /* ShorthandShare.appex */;
@@ -277,6 +280,11 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		A19984000000000000000002 /* onnxruntime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A19984000000000000000003 /* onnxruntime-swift-package-manager */;
+			productName = onnxruntime;
+		};
+		A19984000000000000000005 /* onnxruntime */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A19984000000000000000003 /* onnxruntime-swift-package-manager */;
 			productName = onnxruntime;
