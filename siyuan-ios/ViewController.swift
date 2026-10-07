@@ -51,7 +51,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   var keyboardShowed = false
   var keyboardEndFrame: CGRect?
   var isOrientationTransitioning = false
-  var isDarkStyle = false
+  var isDarkStyle = true
+  private var pendingStatusBarAppearance: (color: UIColor, isDark: Bool)?
   private var windowControlInsetsPayload: String?
   private var windowControlLayoutRefreshPending = false
   @available(iOS 26.0, *)
@@ -132,11 +133,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       return
     }
 
-    // 启动/加载阶段 webview 显示的 boot/index.html 与 #loading 蒙层背景恒为深色 #1e1e1e，
-    // 故顶/底条初始也用同色与之衔接；待 webview 完全启动、changeStatusBar 回调到达后
-    // 再由其按思源主题精修为精确主题色与状态栏样式。
-    view.backgroundColor = UIColor(
-      red: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1)
+    // 网页主题就绪前跟随系统外观，与系统启动屏保持一致。
+    let startupDark = traitCollection.userInterfaceStyle == .dark
+    let startupColor = UIColor.systemBackground.resolvedColor(with: traitCollection)
+    applyStatusBarAppearance(color: startupColor, isDark: startupDark)
 
     initKernel()
 
@@ -183,14 +183,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     ViewController.syWebView.scrollView.isScrollEnabled = false
     ViewController.syWebView.scrollView.contentInsetAdjustmentBehavior = .never
     ViewController.syWebView.scrollView.delegate = self
-    // boot 页与 index 的 #loading 蒙层背景恒为深色 #1e1e1e，故 webview 及其滚动视图底色
-    // 也固定为深色，避免 HTML/CSS 渲染前露出默认白底。webview 内容（body 背景不透明）会
-    // 完全覆盖此底色；顶/底条由 changeStatusBar 回调按主题精修。
+    // 网页透明区域与原生安全区使用同一底色。
     ViewController.syWebView.isOpaque = false
-    ViewController.syWebView.backgroundColor = UIColor(
-      red: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1)
-    ViewController.syWebView.scrollView.backgroundColor = UIColor(
-      red: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1)
+    ViewController.syWebView.backgroundColor = view.backgroundColor
+    ViewController.syWebView.scrollView.backgroundColor = view.backgroundColor
     NotificationCenter.default.addObserver(
       self, selector: #selector(keyboardWillChange),
       name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
@@ -327,6 +323,39 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     return isDarkStyle ? .lightContent : .darkContent
   }
 
+  private func applyStatusBarAppearance(color: UIColor, isDark: Bool) {
+    let previousDarkStyle = isDarkStyle
+    isDarkStyle = isDark
+    view.backgroundColor = color
+    ViewController.syWebView.backgroundColor = color
+    ViewController.syWebView.scrollView.backgroundColor = color
+    if previousDarkStyle != isDarkStyle {
+      setNeedsStatusBarAppearanceUpdate()
+    }
+  }
+
+  private func installStartupAppearance(in webView: WKWebView) {
+    var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 1
+    (view.backgroundColor ?? .systemBackground).resolvedColor(with: traitCollection)
+      .getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+    let color = "rgb(\(Int(red * 255)),\(Int(green * 255)),\(Int(blue * 255)))"
+    let marker = "/* siyuan-native-startup-appearance */"
+    let source = """
+      \(marker)
+      (() => {
+        const style = document.createElement('style');
+        style.id = 'siyuan-native-startup-appearance';
+        style.textContent = 'html, body, #loading .b3-dialog__scrim { background-color: \(color) !important; }';
+        document.documentElement.appendChild(style);
+      })();
+      """
+    let controller = webView.configuration.userContentController
+    let retained = controller.userScripts.filter { !$0.source.hasPrefix(marker) }
+    controller.removeAllUserScripts()
+    retained.forEach { controller.addUserScript($0) }
+    controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+  }
+
   func scrollViewDidScroll(_ scrollView: UIScrollView) {
     guard #available(iOS 26.0, *), scrollView === ViewController.syWebView.scrollView,
       scrollView.contentOffset != .zero
@@ -352,17 +381,18 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
       Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
     case .changeStatusBar:
-      let argument = (message.body as! String).split(separator: " ")
-      let previousDarkStyle = isDarkStyle
-      if argument.count == 2 && argument[1] == "0" {
-        isDarkStyle = false
+      guard let value = message.body as? String else { return }
+      let argument = value.split(separator: " ")
+      guard let hexColor = argument.first else { return }
+      let isDark = !(argument.count == 2 && argument[1] == "0")
+      guard let color = UIColor(hexString: String(hexColor), isDarkMode: isDark) else { return }
+      ViewController.syWebView.evaluateJavaScript(
+        "document.getElementById('siyuan-native-startup-appearance')?.remove()", completionHandler: nil)
+      if bootWebView != nil {
+        // 启动页仍覆盖正文时暂存主题，避免状态栏提前切换为认证页或编辑器的底色。
+        pendingStatusBarAppearance = (color, isDark)
       } else {
-        isDarkStyle = true
-      }
-      self.view.backgroundColor = UIColor.init(
-        hexString: String(argument[0]), isDarkMode: isDarkStyle)
-      if previousDarkStyle != isDarkStyle {
-        setNeedsStatusBarAppearanceUpdate()
+        applyStatusBarAppearance(color: color, isDark: isDark)
       }
     case .setClipboard:
       UIPasteboard.general.string = (message.body as! String)
@@ -441,6 +471,11 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     guard let url = navigationAction.request.url else {
       decisionHandler(.allow)
       return
+    }
+
+    if webView === ViewController.syWebView, navigationAction.targetFrame?.isMainFrame == true,
+      isLocalKernelURL(url) {
+      installStartupAppearance(in: webView)
     }
 
     if webView === ViewController.syWebView, navigationAction.shouldPerformDownload,
@@ -538,6 +573,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     mainPageNavigationStarted = false
     mainPageReady = false
 
+    pendingStatusBarAppearance = nil
+
     let webView: WKWebView
     if let currentBootWebView = bootWebView {
       webView = currentBootWebView
@@ -563,6 +600,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       }
     }
 
+    installStartupAppearance(in: webView)
     webView.load(URLRequest(url: url))
   }
 
@@ -571,6 +609,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     bootWebView?.navigationDelegate = nil
     bootWebView?.removeFromSuperview()
     bootWebView = nil
+    if let appearance = pendingStatusBarAppearance {
+      pendingStatusBarAppearance = nil
+      applyStatusBarAppearance(color: appearance.color, isDark: appearance.isDark)
+    }
   }
 
   private func startBootProgressMonitor() {
