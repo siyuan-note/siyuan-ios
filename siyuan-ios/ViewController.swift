@@ -37,6 +37,7 @@ private enum ScriptMessageName: String {
   case cancelNotification
   case vibrate
   case openAuthURL
+  case finishKeyboardComposition
 }
 
 // Deliberately exact: assets, exports, plugins, and arbitrary stage documents are not app UI.
@@ -218,6 +219,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, name: ScriptMessageName.vibrate.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
       self, name: ScriptMessageName.openAuthURL.rawValue)
+    ViewController.syWebView.configuration.userContentController.addScriptMessageHandler(
+      self, contentWorld: .page, name: ScriptMessageName.finishKeyboardComposition.rawValue)
 
     ViewController.syWebView.configuration.userContentController.addScriptMessageHandler(
       self, contentWorld: .page, name: Self.mapBoundaryHandlerName)
@@ -445,15 +448,19 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     _ userContentController: WKUserContentController, didReceive message: WKScriptMessage,
     replyHandler: @escaping (Any?, String?) -> Void
   ) {
-    guard message.name == Self.mapBoundaryHandlerName,
-      acceptsNativeBridgeMessage(userContentController, message)
-    else {
+    guard acceptsNativeBridgeMessage(userContentController, message) else {
       replyHandler(nil, "Untrusted or inactive native bridge document")
       return
     }
-    // This attests only to the native bridge/navigation policy, never network isolation.
-    let capability: [String: Any] = ["version": 1, "enabled": true]
-    replyHandler(capability, nil)
+    if message.name == Self.mapBoundaryHandlerName {
+      // 此能力只确认原生消息与页面导航边界，不表示网络隔离。
+      let capability: [String: Any] = ["version": 1, "enabled": true]
+      replyHandler(capability, nil)
+    } else if message.name == ScriptMessageName.finishKeyboardComposition.rawValue {
+      finishKeyboardComposition(message, replyHandler: replyHandler)
+    } else {
+      replyHandler(nil, "Unknown native bridge message")
+    }
   }
 
   func userContentController(
@@ -549,6 +556,47 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     default:
       return
     }
+  }
+
+  private func finishKeyboardComposition(
+    _ message: WKScriptMessage,
+    replyHandler: @escaping (Any?, String?) -> Void
+  ) {
+    if message.body as? String == "restore" {
+      ViewController.syWebView.evaluateJavaScript("""
+        (() => {
+          const input = document.activeElement;
+          if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) return false;
+          const start = input.selectionStart, end = input.selectionEnd;
+          input.blur();
+          input.focus({preventScroll: true});
+          input.setSelectionRange(start, end);
+          return document.activeElement === input;
+        })()
+        """) { result, error in
+          replyHandler(result as? Bool ?? false, error?.localizedDescription)
+        }
+      return
+    }
+    func finishComposition(in view: UIView) -> Bool {
+      if view.isFirstResponder, let input = view as? UITextInput {
+        input.inputDelegate?.textWillChange(input)
+        input.inputDelegate?.selectionWillChange(input)
+        input.unmarkText()
+        input.inputDelegate?.selectionDidChange(input)
+        input.inputDelegate?.textDidChange(input)
+        // 快捷键的候选可能仍保留在系统输入会话中，网页恢复搜索框焦点时重新建立会话。
+        view.resignFirstResponder()
+        return true
+      }
+      for child in view.subviews {
+        if finishComposition(in: child) { return true }
+      }
+      return false
+    }
+    // 结束系统输入法的组词，再通知网页恢复搜索词，保留外接键盘的输入焦点。
+    let finished = finishComposition(in: ViewController.syWebView)
+    DispatchQueue.main.async { replyHandler(finished, nil) }
   }
 
   func webView(
@@ -1029,8 +1077,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     keyboardShowed = false
     keyboardEndFrame = nil
     updateWebViewFrame()
-    ViewController.syWebView.evaluateJavaScript(
-      "document.activeElement && document.activeElement.blur();hideKeyboardToolbar()")
+    // 键盘收起通知可能晚于弹窗的焦点切换，仅更新工具栏，保留当前控件的键盘焦点。
+    ViewController.syWebView.evaluateJavaScript("hideKeyboardToolbar()")
   }
 
   private func updateWebViewFrame() {

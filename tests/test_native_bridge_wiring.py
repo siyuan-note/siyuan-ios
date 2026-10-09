@@ -18,7 +18,13 @@ class NativeBridgeWiring(unittest.TestCase):
 
     def test_capability_is_native_reply_with_same_gate(self):
         self.assertIn('addScriptMessageHandler(\n      self, contentWorld: .page, name: Self.mapBoundaryHandlerName)', SOURCE)
-        self.assertRegex(SOURCE, r'guard message.name == Self.mapBoundaryHandlerName,\s+acceptsNativeBridgeMessage')
+        start = SOURCE.index('replyHandler: @escaping (Any?, String?) -> Void')
+        end = SOURCE.index('\n  func userContentController(', start)
+        receiver = SOURCE[start:end]
+        gate = receiver.index('guard acceptsNativeBridgeMessage(userContentController, message)')
+        self.assertLess(gate, receiver.index('message.name == Self.mapBoundaryHandlerName'))
+        self.assertLess(gate, receiver.index('message.name == ScriptMessageName.finishKeyboardComposition.rawValue'))
+        self.assertEqual(SOURCE.count('func userContentController('), 2)
         self.assertIn('let capability: [String: Any] = ["version": 1, "enabled": true]', SOURCE)
         self.assertIn('replyHandler(capability, nil)', SOURCE)
 
