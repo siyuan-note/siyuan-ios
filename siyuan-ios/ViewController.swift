@@ -39,8 +39,45 @@ private enum ScriptMessageName: String {
   case openAuthURL
 }
 
+// Deliberately exact: assets, exports, plugins, and arbitrary stage documents are not app UI.
+// Keep this policy independent of UIKit so it can be exercised by the regression harness.
+enum NativeBridgePolicy {
+  static func isTrustedDocument(_ url: URL?) -> Bool {
+    guard let url = url, url.scheme == "http", url.host == "127.0.0.1",
+      url.port == 6806, url.user == nil, url.password == nil,
+      let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else { return false }
+    return ["/stage/build/mobile", "/stage/build/mobile/", "/stage/build/mobile/index.html",
+      "/stage/build/app", "/stage/build/app/", "/stage/build/app/index.html",
+      "/stage/build/desktop", "/stage/build/desktop/", "/stage/build/desktop/index.html",
+      "/check-auth"].contains(components.percentEncodedPath)
+  }
+
+  static func acceptsMessage(
+    policyInstalled: Bool, expectedWebView: Bool, expectedController: Bool,
+    expectedDelegate: Bool, isMainFrame: Bool, scheme: String, host: String, port: Int,
+    committedURL: URL?, currentURL: URL?, senderURL: URL?
+  ) -> Bool {
+    return policyInstalled && expectedWebView && expectedController && expectedDelegate
+      && isMainFrame && scheme == "http" && host == "127.0.0.1" && port == 6806
+      && isTrustedDocument(committedURL) && isTrustedDocument(senderURL)
+      && sameDocument(committedURL, currentURL) && sameDocument(committedURL, senderURL)
+  }
+
+  static func sameDocument(_ first: URL?, _ second: URL?) -> Bool {
+    guard let first = first, let second = second,
+      var a = URLComponents(url: first, resolvingAgainstBaseURL: false),
+      var b = URLComponents(url: second, resolvingAgainstBaseURL: false)
+    else { return false }
+    // In-page hash navigation does not replace the document.
+    a.fragment = nil
+    b.fragment = nil
+    return a == b
+  }
+}
+
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate,
-  WKScriptMessageHandler, UIPrintInteractionControllerDelegate,
+  WKScriptMessageHandler, WKScriptMessageHandlerWithReply, UIPrintInteractionControllerDelegate,
   ASWebAuthenticationPresentationContextProviding
 {
 
@@ -52,6 +89,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   var keyboardEndFrame: CGRect?
   var isOrientationTransitioning = false
   var isDarkStyle = true
+  private static let mapBoundaryHandlerName = "getAVMapNativeBoundary"
+  private var nativeBridgePolicyInstalled = false
+  private var committedBridgeDocument: URL?
+  private var bridgeNavigationGeneration: UInt64 = 0
   private var pendingStatusBarAppearance: (color: UIColor, isDark: Bool)?
   private var windowControlInsetsPayload: String?
   private var windowControlLayoutRefreshPending = false
@@ -108,6 +149,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   deinit {
+    revokeNativeBridgeDocument()
+    nativeBridgePolicyInstalled = false
     // make sure to remove the observer when this view controller is dismissed/deallocated
     NotificationCenter.default.removeObserver(self)
     bootProgressMonitorActive = false
@@ -176,8 +219,12 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     ViewController.syWebView.configuration.userContentController.add(
       self, name: ScriptMessageName.openAuthURL.rawValue)
 
-    // open url
+    ViewController.syWebView.configuration.userContentController.addScriptMessageHandler(
+      self, contentWorld: .page, name: Self.mapBoundaryHandlerName)
+
+    // Set the capability flag only after both receiver and navigation policy are installed.
     ViewController.syWebView.navigationDelegate = self
+    nativeBridgePolicyInstalled = true
 
     // show keyboard
     ViewController.syWebView.scrollView.isScrollEnabled = false
@@ -373,9 +420,46 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       alpha: 1.0)
   }
 
+  private func revokeNativeBridgeDocument() {
+    committedBridgeDocument = nil
+    bridgeNavigationGeneration &+= 1
+  }
+
+  private func acceptsNativeBridgeMessage(
+    _ controller: WKUserContentController, _ message: WKScriptMessage
+  ) -> Bool {
+    let webView = ViewController.syWebView
+    let origin = message.frameInfo.securityOrigin
+    return NativeBridgePolicy.acceptsMessage(
+      policyInstalled: nativeBridgePolicyInstalled,
+      expectedWebView: message.webView === webView,
+      expectedController: controller === webView.configuration.userContentController,
+      expectedDelegate: webView.navigationDelegate === self,
+      isMainFrame: message.frameInfo.isMainFrame,
+      scheme: origin.protocol, host: origin.host, port: origin.port,
+      committedURL: committedBridgeDocument, currentURL: webView.url,
+      senderURL: message.frameInfo.request.url)
+  }
+
+  func userContentController(
+    _ userContentController: WKUserContentController, didReceive message: WKScriptMessage,
+    replyHandler: @escaping (Any?, String?) -> Void
+  ) {
+    guard message.name == Self.mapBoundaryHandlerName,
+      acceptsNativeBridgeMessage(userContentController, message)
+    else {
+      replyHandler(nil, "Untrusted or inactive native bridge document")
+      return
+    }
+    // This attests only to the native bridge/navigation policy, never network isolation.
+    let capability: [String: Any] = ["version": 1, "enabled": true]
+    replyHandler(capability, nil)
+  }
+
   func userContentController(
     _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
   ) {
+    guard acceptsNativeBridgeMessage(userContentController, message) else { return }
     switch ScriptMessageName(rawValue: message.name) {
     case .startKernelFast:
       let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
@@ -430,10 +514,13 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       let body = dict!["body"] as? String ?? ""
       let delay = dict!["delay"] as? Int ?? 0
       let callback = dict!["callback"] as? String
+      let generation = bridgeNavigationGeneration
       sendNotification(channel: channel, title: title, body: body, delayInSeconds: delay) { id in
         // 异步将 ID 回传给 JS
         if let callbackName = callback {
-          DispatchQueue.main.async {
+          DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.bridgeNavigationGeneration == generation,
+              self.acceptsNativeBridgeMessage(userContentController, message) else { return }
             ViewController.syWebView.evaluateJavaScript(callbackName + "(" + String(id) + ")")
           }
         }
@@ -468,8 +555,17 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
   ) {
+    // Subframes may load their own content, but must never trigger native downloads,
+    // external applications, or the boot-to-main promotion below. In particular, reject
+    // a child targeting the top frame or a new window even after a user gesture.
+    if webView === ViewController.syWebView || webView === bootWebView {
+      if !navigationAction.sourceFrame.isMainFrame {
+        decisionHandler(navigationAction.targetFrame?.isMainFrame == false ? .allow : .cancel)
+        return
+      }
+    }
     guard let url = navigationAction.request.url else {
-      decisionHandler(.allow)
+      decisionHandler(.cancel)
       return
     }
 
@@ -516,6 +612,22 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       decisionHandler(.cancel)
       UIApplication.shared.open(url, options: [:], completionHandler: nil)
     } else {
+      if webView === ViewController.syWebView, navigationAction.targetFrame?.isMainFrame == true {
+        // The root is a kernel redirect to the actual UI (or authentication page).
+        guard NativeBridgePolicy.isTrustedDocument(url)
+          || (isLocalKernelURL(url) && url.path == "/" && url.user == nil && url.password == nil)
+        else {
+          decisionHandler(.cancel)
+          return
+        }
+        if !NativeBridgePolicy.sameDocument(webView.url, url) {
+          revokeNativeBridgeDocument()
+        } else if navigationAction.navigationType == .reload {
+          revokeNativeBridgeDocument()
+        }
+        // Same-document back/forward may have no didCommit. A real document traversal
+        // is revoked by didStartProvisionalNavigation instead.
+      }
       decisionHandler(.allow)
     }
   }
@@ -524,7 +636,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     _ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
   ) {
-    if webView === ViewController.syWebView,
+    if webView === ViewController.syWebView, navigationResponse.isForMainFrame,
       let response = navigationResponse.response as? HTTPURLResponse,
       (200..<300).contains(response.statusCode),
       response.value(forHTTPHeaderField: "Content-Disposition")?.lowercased()
@@ -533,6 +645,13 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     {
       decisionHandler(.cancel)
       saveExportFile(uri: assetPath, requestID: "")
+      return
+    }
+
+    if webView === ViewController.syWebView, navigationResponse.isForMainFrame,
+      !NativeBridgePolicy.isTrustedDocument(navigationResponse.response.url) {
+      revokeNativeBridgeDocument()
+      decisionHandler(.cancel)
       return
     }
 
@@ -687,6 +806,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     mainPageReady = false
     forceDefaultBootAppearance = false
     ViewController.syWebView.isHidden = false
+    revokeNativeBridgeDocument()
     ViewController.syWebView.load(URLRequest(url: url))
   }
 
@@ -694,7 +814,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     guard let url = url, isLocalKernelURL(url) else {
       return false
     }
-    return url.path.contains("/stage/build/") || url.path.contains("/check-auth")
+    return NativeBridgePolicy.isTrustedDocument(url)
   }
 
   private func isLocalKernelURL(_ url: URL) -> Bool {
@@ -758,6 +878,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     guard !webViewRecoveryScheduled else {
       return
     }
+    revokeNativeBridgeDocument()
     mainPageReady = false
     webViewRecoveryScheduled = true
     webViewRecoveryGeneration += 1
@@ -1000,6 +1121,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
     if webView == ViewController.syWebView {
+      committedBridgeDocument = NativeBridgePolicy.isTrustedDocument(webView.url) ? webView.url : nil
       keyboardShowed = false
       keyboardEndFrame = nil
       view.setNeedsLayout()
@@ -1008,6 +1130,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+    if webView === ViewController.syWebView { revokeNativeBridgeDocument() }
     guard let url = webView.url,
       isLocalKernelURL(url), !url.path.contains("/appearance/boot/")
     else {
@@ -1082,6 +1205,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     guard webView == ViewController.syWebView || webView == bootWebView else {
       return
     }
+    if webView === ViewController.syWebView { revokeNativeBridgeDocument() }
     forceDefaultBootAppearance = !kernelBootCompleted
     mainPageNavigationStarted = false
     mainPageReady = false
