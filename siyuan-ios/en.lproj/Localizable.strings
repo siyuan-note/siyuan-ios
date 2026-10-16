@@ -9,3 +9,10 @@
 "Paste" = "Paste";
 "shorthand_intent_description" = "Open SiYuan shorthand to capture a quick note";
 "shorthand_intent_content_param" = "Content";
+"startupFailed" = "SiYuan failed to start";
+"startupStage" = "Failed stage: ${stage}";
+"startupStagePage" = "Loading the page";
+"startupReload" = "Reload";
+"startupCopy" = "Copy error details";
+"startupCopied" = "Copied";
+"startupTimeout" = "Startup timed out";

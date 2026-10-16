@@ -140,6 +140,9 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   private var mainPageWatchdog: DispatchWorkItem?
   private var mainPageWatchdogGeneration = 0
   private static let mainPageLoadTimeout: TimeInterval = 30
+  private var startupFailureView: UIView?
+  private var startupStartedAt = Date()
+  private var mainPageStartupStage = ""
 
   required init(coder: NSCoder) {
     super.init(coder: coder)!
@@ -257,9 +260,11 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, selector: #selector(willEnterForeground),
       name: UIApplication.didBecomeActiveNotification, object: nil)
     NotificationCenter.default.addObserver(
+      self, selector: #selector(suspendStartupMonitoring),
+      name: UIApplication.didEnterBackgroundNotification, object: nil)
+    NotificationCenter.default.addObserver(
       self, selector: #selector(protectedDataDidBecomeUnavailable),
       name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
-    waitFotKernelHttpServing()
     ViewController.syWebView.isHidden = true
     // 网页置于容器底层，保留系统窗口控件的显示层级。
     view.insertSubview(ViewController.syWebView, at: 0)
@@ -858,6 +863,168 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     ViewController.syWebView.load(URLRequest(url: url))
   }
 
+  // 从随程序打包的小型语言表读取启动文案，不依赖 HTTP 或前端语言包初始化。
+  private func startupStrings() -> [String: String] {
+    let fallback = [
+      "startupFailed": NSLocalizedString("startupFailed", comment: "启动失败标题"),
+      "startupStage": NSLocalizedString("startupStage", comment: "启动失败阶段"),
+      "startupStagePage": NSLocalizedString("startupStagePage", comment: "加载页面"),
+      "startupReload": NSLocalizedString("startupReload", comment: "重新加载"),
+      "startupCopy": NSLocalizedString("startupCopy", comment: "复制错误信息"),
+      "copied": NSLocalizedString("startupCopied", comment: "已复制"),
+      "startupTimeout": NSLocalizedString("startupTimeout", comment: "启动超时"),
+    ]
+    guard let resources = Bundle.main.resourceURL,
+      let data = try? Data(contentsOf: resources.appendingPathComponent("app/appearance/boot/startup-languages.json")),
+      let translations = try? JSONSerialization.jsonObject(with: data) as? [String: [String: String]]
+    else { return fallback }
+    var preferred = Locale.preferredLanguages
+    if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+      var workspace = documents.appendingPathComponent("siyuan")
+      if let data = try? Data(contentsOf: documents.appendingPathComponent("home/.config/siyuan/workspace.json")),
+        let paths = try? JSONSerialization.jsonObject(with: data) as? [String], let last = paths.last {
+        workspace = URL(fileURLWithPath: last, isDirectory: true)
+      }
+      if let data = try? Data(contentsOf: workspace.appendingPathComponent("conf/conf.json")),
+        let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let language = config["lang"] as? String {
+        preferred.insert(language, at: 0)
+      }
+    }
+    for language in preferred {
+      let normalized = language.replacingOccurrences(of: "_", with: "-").lowercased()
+      if let key = translations.keys.first(where: { $0.lowercased() == normalized }) {
+        return translations[key] ?? fallback
+      }
+      if normalized.hasPrefix("zh") {
+        let traditional = ["hant", "tw", "hk", "mo"].contains(where: { normalized.contains($0) })
+        return translations[traditional ? "zh-TW" : "zh-CN"] ?? fallback
+      }
+      let base = String(normalized.split(separator: "-").first ?? "en")
+      if let strings = translations[base == "pt" ? "pt-BR" : base] { return strings }
+    }
+    return translations["en"] ?? fallback
+  }
+
+  private func showStartupFailure(_ error: String) {
+    guard startupFailureView == nil else { return }
+    cancelMainPageWatchdog()
+    cancelWebViewRecovery()
+    bootProgressMonitorActive = false
+    bootProgressTask?.cancel()
+    removeBootWebView()
+    let strings = startupStrings()
+    let stage = mainPageStartupStage.isEmpty ? "page" : mainPageStartupStage
+    let phaseKey = "startupStage" + stage.prefix(1).uppercased() + String(stage.dropFirst())
+    let details = "SiYuan \(getAppVersion())\niOS \(UIDevice.current.systemVersion)\nstage=\(stage)\n\n\(error)"
+    let overlay = UIView()
+    overlay.backgroundColor = .systemBackground
+    overlay.translatesAutoresizingMaskIntoConstraints = false
+    let title = UILabel()
+    title.text = strings["startupFailed"]
+    title.font = .preferredFont(forTextStyle: .title2)
+    title.adjustsFontForContentSizeCategory = true
+    title.numberOfLines = 0
+    title.accessibilityTraits.insert(.header)
+    let phase = UILabel()
+    phase.text = strings["startupStage"]?.replacingOccurrences(
+      of: "${stage}", with: strings[phaseKey] ?? strings["startupStagePage"] ?? stage)
+    phase.font = .preferredFont(forTextStyle: .body)
+    phase.adjustsFontForContentSizeCategory = true
+    phase.numberOfLines = 0
+    let information = UITextView()
+    information.text = details
+    information.isEditable = false
+    information.font = .preferredFont(forTextStyle: .body)
+    information.adjustsFontForContentSizeCategory = true
+    let reload = UIButton(type: .system)
+    reload.titleLabel?.numberOfLines = 0
+    reload.titleLabel?.font = .preferredFont(forTextStyle: .body)
+    reload.titleLabel?.adjustsFontForContentSizeCategory = true
+    reload.setTitle(strings["startupReload"], for: .normal)
+    reload.addAction(UIAction { [weak self] _ in
+      guard let self = self else { return }
+      self.startupFailureView?.removeFromSuperview()
+      self.startupFailureView = nil
+      self.startupStartedAt = Date()
+      self.mainPageReady = false
+      self.mainPageNavigationStarted = false
+      if self.kernelBootCompleted {
+        self.navigateToMainPage()
+      } else {
+        self.loadBootPage()
+        self.startBootProgressMonitor()
+      }
+    }, for: .touchUpInside)
+    let copy = UIButton(type: .system)
+    copy.titleLabel?.numberOfLines = 0
+    copy.titleLabel?.font = .preferredFont(forTextStyle: .body)
+    copy.titleLabel?.adjustsFontForContentSizeCategory = true
+    copy.setTitle(strings["startupCopy"], for: .normal)
+    copy.addAction(UIAction { [weak copy] _ in
+      UIPasteboard.general.string = details
+      copy?.setTitle(strings["copied"], for: .normal)
+    }, for: .touchUpInside)
+    let content = UIStackView(arrangedSubviews: [title, phase, information, reload, copy])
+    content.axis = .vertical
+    content.spacing = 16
+    content.translatesAutoresizingMaskIntoConstraints = false
+    let scroll = UIScrollView()
+    scroll.translatesAutoresizingMaskIntoConstraints = false
+    scroll.addSubview(content)
+    overlay.addSubview(scroll)
+    view.addSubview(overlay)
+    NSLayoutConstraint.activate([
+      overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      overlay.topAnchor.constraint(equalTo: view.topAnchor),
+      overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      scroll.leadingAnchor.constraint(equalTo: overlay.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+      scroll.trailingAnchor.constraint(equalTo: overlay.safeAreaLayoutGuide.trailingAnchor, constant: -24),
+      scroll.topAnchor.constraint(equalTo: overlay.safeAreaLayoutGuide.topAnchor, constant: 24),
+      scroll.bottomAnchor.constraint(equalTo: overlay.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+      content.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+      content.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+      content.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+      content.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+      content.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor),
+      information.heightAnchor.constraint(equalToConstant: 240),
+      reload.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+      copy.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+    ])
+    startupFailureView = overlay
+    UIAccessibility.post(notification: .screenChanged, argument: title)
+  }
+
+  // 网页导航完成后继续检查前端状态；错误页自行提供重试入口，认证页可直接交互。
+  private func pollMainPageReadiness(_ generation: Int) {
+    guard mainPageWatchdogGeneration == generation, startupFailureView == nil else { return }
+    ViewController.syWebView.evaluateJavaScript("""
+      ({ready: Boolean(window.siyuan && window.siyuan.isReady) || location.pathname === '/check-auth',
+        failed: document.documentElement.getAttribute('data-startup-state') === 'failed',
+        stage: document.documentElement.getAttribute('data-startup-stage') || ''})
+      """) { [weak self] value, _ in
+      guard let self = self, self.mainPageWatchdogGeneration == generation,
+        self.startupFailureView == nil else { return }
+      if let result = value as? [String: Any] {
+        if result["ready"] as? Bool == true || result["failed"] as? Bool == true {
+          self.mainPageReady = result["ready"] as? Bool == true
+          self.removeBootWebView()
+          self.cancelMainPageWatchdog()
+          return
+        }
+        if let stage = result["stage"] as? String, !stage.isEmpty, stage != self.mainPageStartupStage {
+          self.mainPageStartupStage = stage
+          self.scheduleMainPageWatchdog()
+          return
+        }
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+        self?.pollMainPageReadiness(generation)
+      }
+    }
+  }
+
   private func isReadyMainPage(_ url: URL?) -> Bool {
     guard let url = url, isLocalKernelURL(url) else {
       return false
@@ -900,14 +1067,16 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         return
       }
 
-      print("Main page load timed out, reload it")
-      ViewController.syWebView.stopLoading()
-      self.mainPageNavigationStarted = false
-      self.navigateToMainPage()
+      if UIApplication.shared.applicationState != .active {
+        self.scheduleMainPageWatchdog()
+        return
+      }
+      self.showStartupFailure(self.startupStrings()["startupTimeout"] ?? NSLocalizedString("startupTimeout", comment: "启动超时"))
     }
     mainPageWatchdog = watchdog
     DispatchQueue.main.asyncAfter(
       deadline: .now() + ViewController.mainPageLoadTimeout, execute: watchdog)
+    pollMainPageReadiness(generation)
   }
 
   private func cancelMainPageWatchdog() {
@@ -916,12 +1085,22 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     mainPageWatchdog = nil
   }
 
-  private func scheduleWebViewRecovery(error: Error? = nil) {
+  @objc private func suspendStartupMonitoring() {
+    cancelMainPageWatchdog()
+  }
+
+  private func scheduleWebViewRecovery(error: Error? = nil, recoverLoadedPage: Bool = false) {
     if let error = error {
       let nsError = error as NSError
       if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
         return
       }
+    }
+    if !recoverLoadedPage && (kernelBootCompleted || Iosk.MobileIsHttpServing()
+      || Date().timeIntervalSince(startupStartedAt) >= 30) {
+      showStartupFailure(error?.localizedDescription ?? startupStrings()["startupTimeout"]
+        ?? NSLocalizedString("startupTimeout", comment: "启动超时"))
+      return
     }
     guard !webViewRecoveryScheduled else {
       return
@@ -954,15 +1133,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   private func cancelWebViewRecovery() {
     webViewRecoveryGeneration += 1
     webViewRecoveryScheduled = false
-  }
-
-  func waitFotKernelHttpServing() {
-    for _ in 1...500 {
-      usleep(100000)  // 0.1s
-      if Iosk.MobileIsHttpServing() {
-        break
-      }
-    }
   }
 
   func getIP() -> String? {
@@ -1137,6 +1307,9 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   @objc func willEnterForeground(_ notification: NSNotification!) {
+    if kernelBootCompleted && !mainPageReady && startupFailureView == nil {
+      scheduleMainPageWatchdog()
+    }
     // iOS 端息屏后内核退出，再次进入时重新拉起内核
     let url = URL(string: "http://127.0.0.1:6806/api/system/version")!
     let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
@@ -1195,6 +1368,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     } else if webView == ViewController.syWebView {
       mainPageNavigationStarted = true
       mainPageReady = false
+      mainPageStartupStage = ""
+      scheduleMainPageWatchdog()
     }
   }
 
@@ -1221,9 +1396,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         bootProgressTask = nil
         kernelBootCompleted = true
         mainPageNavigationStarted = true
-        mainPageReady = true
         forceDefaultBootAppearance = false
-        cancelMainPageWatchdog()
         removeBootWebView()
       }
       ViewController.flushOIDCCallback()
@@ -1254,10 +1427,11 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       return
     }
     if webView === ViewController.syWebView { revokeNativeBridgeDocument() }
+    let recoverLoadedPage = mainPageReady
     forceDefaultBootAppearance = !kernelBootCompleted
     mainPageNavigationStarted = false
     mainPageReady = false
-    scheduleWebViewRecovery()
+    scheduleWebViewRecovery(recoverLoadedPage: recoverLoadedPage)
   }
 
   private func initiatePrintInteraction() {

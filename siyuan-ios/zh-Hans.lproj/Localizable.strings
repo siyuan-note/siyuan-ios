@@ -8,3 +8,10 @@
 "OK" = "确定";
 "shorthand_intent_description" = "打开思源笔记闪念速记，记录一条速记";
 "shorthand_intent_content_param" = "内容";
+"startupFailed" = "思源启动失败";
+"startupStage" = "失败阶段：${stage}";
+"startupStagePage" = "加载页面";
+"startupReload" = "重新加载";
+"startupCopy" = "复制错误信息";
+"startupCopied" = "已复制";
+"startupTimeout" = "启动超时";
