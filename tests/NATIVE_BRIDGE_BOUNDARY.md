@@ -25,6 +25,8 @@ this capability. A subframe can navigate itself, but cannot promote itself into 
 frame/new window, open an external app, initiate a native asset download, or activate the
 boot-to-main transition. Main-frame redirects must finish at an allowlisted app document.
 
+Older WebKit releases return a null `WKNavigationAction.sourceFrame` for native API loads despite its non-optional Swift declaration. Preserve that absence when classifying navigation. A source-less request can proceed only as a main-frame GET of type `.other`, without a download attribute, to the exact local boot document in the boot WebView or to the root/application/authentication allowlist in the main WebView. It still passes through the remaining navigation and response policy. A known subframe is always handled separately, including when it targets an allowlisted URL. This exception does not authorize any script message. See the [WebKit implementation](https://github.com/WebKit/WebKit/blob/WebKit-7618.2.12.11.6/Source/WebKit/UIProcess/WebPageProxy.cpp#L6753).
+
 The gate is revoked for top-level provisional navigation, programmatic reload/recovery,
 and WebContent process termination; a trusted commit restores it. A native notification
 callback already in progress is also bound to the navigation generation. Hash-only changes
@@ -58,6 +60,7 @@ No permission to call kernel APIs or to carry ambient credentials follows from t
 1. Launch normally on iPhone and iPad; test mobile/app layout, `/check-auth`, boot retry,
    watchdog recovery, background/foreground, reload, back/forward, and WebContent termination.
    The trusted main document must receive the capability after each successful commit.
+   Include iOS 15.6, 17.7, 18.4, and 26; verify source-less native loads and root redirects on older WebKit.
 2. Verify all existing actions from the real main page, including status bar, clipboard,
    openLink, export V1/V2, purchase, print, exit, notifications/cancel, vibrate, OIDC, and
    startKernelFast wherever the frontend still uses it. Use sandbox purchase testing.

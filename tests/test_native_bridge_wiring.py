@@ -39,11 +39,24 @@ class NativeBridgeWiring(unittest.TestCase):
         start = SOURCE.index('decidePolicyFor navigationAction:')
         end = SOURCE.index('decidePolicyFor navigationResponse:')
         body = SOURCE[start:end]
-        gate = body.index('if !navigationAction.sourceFrame.isMainFrame')
-        self.assertIn('navigationAction.targetFrame?.isMainFrame == false ? .allow : .cancel', body)
-        self.assertLess(gate, body.index('navigationAction.shouldPerformDownload'))
+        gate = body.index('switch policy {')
+        self.assertRegex(body, r'case \.allowSubframe:\s+decisionHandler\(\.allow\)\s+return')
+        self.assertRegex(body, r'case \.cancel:\s+decisionHandler\(\.cancel\)\s+return')
+        self.assertLess(gate, body.index('let assetPath = localAssetDownloadPath'))
         self.assertLess(gate, body.index('navigateToMainPage()'))
         self.assertLess(gate, body.index('UIApplication.shared.open'))
+
+    def test_nullable_source_and_native_load_metadata_reach_policy(self):
+        start = SOURCE.index('decidePolicyFor navigationAction:')
+        end = SOURCE.index('decidePolicyFor navigationResponse:')
+        body = SOURCE[start:end]
+        self.assertIn('let sourceFrame: WKFrameInfo? = navigationAction.sourceFrame', body)
+        self.assertIn('sourceIsMainFrame: sourceFrame?.isMainFrame', body)
+        self.assertIn('targetIsMainFrame: navigationAction.targetFrame?.isMainFrame', body)
+        self.assertIn('requestURL: navigationAction.request.url', body)
+        self.assertIn('isBootWebView: webView === bootWebView', body)
+        self.assertRegex(body, r'isNativeLoad: navigationAction.navigationType == \.other\s+&& navigationAction.request.httpMethod == "GET" && !navigationAction.shouldPerformDownload')
+        self.assertNotIn('navigationAction.sourceFrame.isMainFrame', body)
 
     def test_only_top_response_can_download(self):
         self.assertIn('if webView === ViewController.syWebView, navigationResponse.isForMainFrame,', SOURCE)

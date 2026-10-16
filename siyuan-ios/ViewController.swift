@@ -43,6 +43,12 @@ private enum ScriptMessageName: String {
 // Deliberately exact: assets, exports, plugins, and arbitrary stage documents are not app UI.
 // Keep this policy independent of UIKit so it can be exercised by the regression harness.
 enum NativeBridgePolicy {
+  enum NavigationSourcePolicy: Equatable {
+    case inspect
+    case allowSubframe
+    case cancel
+  }
+
   static func isTrustedDocument(_ url: URL?) -> Bool {
     guard let url = url, url.scheme == "http", url.host == "127.0.0.1",
       url.port == 6806, url.user == nil, url.password == nil,
@@ -74,6 +80,28 @@ enum NativeBridgePolicy {
     a.fragment = nil
     b.fragment = nil
     return a == b
+  }
+
+  // 旧版 WebKit 的原生导航没有来源框架，只允许它加载固定的本机主页面入口。
+  static func navigationSourcePolicy(
+    sourceIsMainFrame: Bool?, targetIsMainFrame: Bool?, requestURL: URL?,
+    isBootWebView: Bool, isNativeLoad: Bool
+  ) -> NavigationSourcePolicy {
+    if sourceIsMainFrame == true {
+      return .inspect
+    }
+    if sourceIsMainFrame == false {
+      return targetIsMainFrame == false ? .allowSubframe : .cancel
+    }
+    guard targetIsMainFrame == true, isNativeLoad,
+      let url = requestURL, url.scheme == "http", url.host == "127.0.0.1", url.port == 6806,
+      url.user == nil, url.password == nil,
+      let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else { return .cancel }
+    if isBootWebView {
+      return components.percentEncodedPath == "/appearance/boot/index.html" ? .inspect : .cancel
+    }
+    return components.percentEncodedPath == "/" || isTrustedDocument(url) ? .inspect : .cancel
   }
 }
 
@@ -608,13 +636,26 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
   ) {
-    // Subframes may load their own content, but must never trigger native downloads,
-    // external applications, or the boot-to-main promotion below. In particular, reject
-    // a child targeting the top frame or a new window even after a user gesture.
+    // 子框架可以加载自身内容，但不能触发原生操作、顶层导航或启动页切换。
     if webView === ViewController.syWebView || webView === bootWebView {
-      if !navigationAction.sourceFrame.isMainFrame {
-        decisionHandler(navigationAction.targetFrame?.isMainFrame == false ? .allow : .cancel)
+      // Swift 声明为非空，旧版 WebKit 的原生 API 导航实际可能返回 nil。
+      let sourceFrame: WKFrameInfo? = navigationAction.sourceFrame
+      let policy = NativeBridgePolicy.navigationSourcePolicy(
+        sourceIsMainFrame: sourceFrame?.isMainFrame,
+        targetIsMainFrame: navigationAction.targetFrame?.isMainFrame,
+        requestURL: navigationAction.request.url,
+        isBootWebView: webView === bootWebView,
+        isNativeLoad: navigationAction.navigationType == .other
+          && navigationAction.request.httpMethod == "GET" && !navigationAction.shouldPerformDownload)
+      switch policy {
+      case .allowSubframe:
+        decisionHandler(.allow)
         return
+      case .cancel:
+        decisionHandler(.cancel)
+        return
+      case .inspect:
+        break
       }
     }
     guard let url = navigationAction.request.url else {
