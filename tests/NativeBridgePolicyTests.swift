@@ -67,6 +67,23 @@ for path in ["/", "/stage/build/mobile/", "/stage/build/app/", "/stage/build/des
 }
 let bootURL = URL(string: "http://127.0.0.1:6806/appearance/boot/index.html?v=3.8.7&appearance=0")!
 check(navigation(url: bootURL, boot: true) == .inspect, "native boot load/retry")
+// 目录重定向仍属于启动页，不能提前切换到主页面或授予原生桥能力。
+let bootDirectoryURL = URL(string: "http://127.0.0.1:6806/appearance/boot/?v=3.8.7&appearance=0")!
+for url in [bootURL, bootDirectoryURL] {
+  check(navigation(url: url, boot: true) == .inspect, "native boot redirect " + url.absoluteString)
+  check(NativeBridgePolicy.isBootDocument(url), "boot navigation is not frontend readiness")
+  check(!NativeBridgePolicy.isTrustedDocument(url), "boot redirect has no native message capability")
+  check(navigation(url: url) == .cancel, "main view cannot load boot redirect")
+}
+for value in ["http://127.0.0.1:6806/appearance/boot/%69ndex.html",
+              "http://127.0.0.1:6806/appearance/boot/index.html/extra",
+              "http://127.0.0.1:6806/appearance/boot/plugin.html",
+              "http://127.0.0.1:6807/appearance/boot/",
+              "http://user@127.0.0.1:6806/appearance/boot/",
+              "https://example.com/appearance/boot/"] {
+  check(!NativeBridgePolicy.isBootDocument(URL(string: value)), "not an exact local boot document " + value)
+}
+check(!NativeBridgePolicy.isBootDocument(app), "frontend is not a boot document")
 check(navigation(source: true, nativeLoad: false) == .inspect, "main-page navigation keeps existing policy")
 check(navigation(source: true, target: nil, nativeLoad: false) == .inspect, "main-page external link keeps existing policy")
 // 子框架即使使用主页面地址，也不能进入原生导航处理。

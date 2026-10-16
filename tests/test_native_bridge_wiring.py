@@ -58,6 +58,12 @@ class NativeBridgeWiring(unittest.TestCase):
         self.assertRegex(body, r'isNativeLoad: navigationAction.navigationType == \.other\s+&& navigationAction.request.httpMethod == "GET" && !navigationAction.shouldPerformDownload')
         self.assertNotIn('navigationAction.sourceFrame.isMainFrame', body)
 
+    def test_boot_redirect_does_not_promote_boot_view_to_ready_frontend(self):
+        self.assertEqual(SOURCE.count('!NativeBridgePolicy.isBootDocument(url)'), 3)
+        self.assertNotIn('url.path.contains("/appearance/boot/")', SOURCE)
+        self.assertIn('return isBootDocument(url) ? .inspect : .cancel', SOURCE)
+        self.assertIn('["/appearance/boot/", "/appearance/boot/index.html"].contains(components.percentEncodedPath)', SOURCE)
+
     def test_only_top_response_can_download(self):
         self.assertIn('if webView === ViewController.syWebView, navigationResponse.isForMainFrame,', SOURCE)
 

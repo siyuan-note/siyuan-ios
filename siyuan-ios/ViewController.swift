@@ -60,6 +60,15 @@ enum NativeBridgePolicy {
       "/check-auth"].contains(components.percentEncodedPath)
   }
 
+  // 保留 URL 中的目录末尾斜杠，识别静态文件服务的 index.html 重定向。
+  static func isBootDocument(_ url: URL?) -> Bool {
+    guard let url = url, url.scheme == "http", url.host == "127.0.0.1", url.port == 6806,
+      url.user == nil, url.password == nil,
+      let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else { return false }
+    return ["/appearance/boot/", "/appearance/boot/index.html"].contains(components.percentEncodedPath)
+  }
+
   static func acceptsMessage(
     policyInstalled: Bool, expectedWebView: Bool, expectedController: Bool,
     expectedDelegate: Bool, isMainFrame: Bool, scheme: String, host: String, port: Int,
@@ -99,7 +108,7 @@ enum NativeBridgePolicy {
       let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     else { return .cancel }
     if isBootWebView {
-      return components.percentEncodedPath == "/appearance/boot/index.html" ? .inspect : .cancel
+      return isBootDocument(url) ? .inspect : .cancel
     }
     return components.percentEncodedPath == "/" || isTrustedDocument(url) ? .inspect : .cancel
   }
@@ -677,7 +686,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
 
     if webView === bootWebView, navigationAction.targetFrame?.isMainFrame == true,
-      isLocalKernelURL(url), !url.path.contains("/appearance/boot/")
+      isLocalKernelURL(url), !NativeBridgePolicy.isBootDocument(url)
     {
       decisionHandler(.cancel)
       bootProgressMonitorActive = false
@@ -1394,7 +1403,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
     if webView === ViewController.syWebView { revokeNativeBridgeDocument() }
     guard let url = webView.url,
-      isLocalKernelURL(url), !url.path.contains("/appearance/boot/")
+      isLocalKernelURL(url), !NativeBridgePolicy.isBootDocument(url)
     else {
       return
     }
@@ -1418,7 +1427,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     if webView == bootWebView {
       cancelWebViewRecovery()
       if let url = webView.url, isLocalKernelURL(url),
-        !url.path.contains("/appearance/boot/")
+        !NativeBridgePolicy.isBootDocument(url)
       {
         bootProgressMonitorActive = false
         bootProgressTask?.cancel()
