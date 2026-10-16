@@ -40,80 +40,6 @@ private enum ScriptMessageName: String {
   case finishKeyboardComposition
 }
 
-// Deliberately exact: assets, exports, plugins, and arbitrary stage documents are not app UI.
-// Keep this policy independent of UIKit so it can be exercised by the regression harness.
-enum NativeBridgePolicy {
-  enum NavigationSourcePolicy: Equatable {
-    case inspect
-    case allowSubframe
-    case cancel
-  }
-
-  static func isTrustedDocument(_ url: URL?) -> Bool {
-    guard let url = url, url.scheme == "http", url.host == "127.0.0.1",
-      url.port == 6806, url.user == nil, url.password == nil,
-      let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    else { return false }
-    return ["/stage/build/mobile", "/stage/build/mobile/", "/stage/build/mobile/index.html",
-      "/stage/build/app", "/stage/build/app/", "/stage/build/app/index.html",
-      "/stage/build/desktop", "/stage/build/desktop/", "/stage/build/desktop/index.html",
-      "/check-auth"].contains(components.percentEncodedPath)
-  }
-
-  // 保留 URL 中的目录末尾斜杠，识别静态文件服务的 index.html 重定向。
-  static func isBootDocument(_ url: URL?) -> Bool {
-    guard let url = url, url.scheme == "http", url.host == "127.0.0.1", url.port == 6806,
-      url.user == nil, url.password == nil,
-      let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    else { return false }
-    return ["/appearance/boot/", "/appearance/boot/index.html"].contains(components.percentEncodedPath)
-  }
-
-  static func acceptsMessage(
-    policyInstalled: Bool, expectedWebView: Bool, expectedController: Bool,
-    expectedDelegate: Bool, isMainFrame: Bool, scheme: String, host: String, port: Int,
-    committedURL: URL?, currentURL: URL?, senderURL: URL?
-  ) -> Bool {
-    return policyInstalled && expectedWebView && expectedController && expectedDelegate
-      && isMainFrame && scheme == "http" && host == "127.0.0.1" && port == 6806
-      && isTrustedDocument(committedURL) && isTrustedDocument(senderURL)
-      && sameDocument(committedURL, currentURL) && sameDocument(committedURL, senderURL)
-  }
-
-  static func sameDocument(_ first: URL?, _ second: URL?) -> Bool {
-    guard let first = first, let second = second,
-      var a = URLComponents(url: first, resolvingAgainstBaseURL: false),
-      var b = URLComponents(url: second, resolvingAgainstBaseURL: false)
-    else { return false }
-    // In-page hash navigation does not replace the document.
-    a.fragment = nil
-    b.fragment = nil
-    return a == b
-  }
-
-  // 旧版 WebKit 的原生导航没有来源框架，只允许它加载固定的本机主页面入口。
-  static func navigationSourcePolicy(
-    sourceIsMainFrame: Bool?, targetIsMainFrame: Bool?, requestURL: URL?,
-    isBootWebView: Bool, isNativeLoad: Bool
-  ) -> NavigationSourcePolicy {
-    if sourceIsMainFrame == true {
-      return .inspect
-    }
-    if sourceIsMainFrame == false {
-      return targetIsMainFrame == false ? .allowSubframe : .cancel
-    }
-    guard targetIsMainFrame == true, isNativeLoad,
-      let url = requestURL, url.scheme == "http", url.host == "127.0.0.1", url.port == 6806,
-      url.user == nil, url.password == nil,
-      let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    else { return .cancel }
-    if isBootWebView {
-      return isBootDocument(url) ? .inspect : .cancel
-    }
-    return components.percentEncodedPath == "/" || isTrustedDocument(url) ? .inspect : .cancel
-  }
-}
-
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate,
   WKScriptMessageHandler, WKScriptMessageHandlerWithReply, UIPrintInteractionControllerDelegate,
   ASWebAuthenticationPresentationContextProviding
@@ -127,10 +53,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   var keyboardEndFrame: CGRect?
   var isOrientationTransitioning = false
   var isDarkStyle = true
-  private static let mapBoundaryHandlerName = "getAVMapNativeBoundary"
-  private var nativeBridgePolicyInstalled = false
-  private var committedBridgeDocument: URL?
-  private var bridgeNavigationGeneration: UInt64 = 0
   private var pendingStatusBarAppearance: (color: UIColor, isDark: Bool)?
   private var windowControlInsetsPayload: String?
   private var windowControlLayoutRefreshPending = false
@@ -190,8 +112,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   deinit {
-    revokeNativeBridgeDocument()
-    nativeBridgePolicyInstalled = false
     // make sure to remove the observer when this view controller is dismissed/deallocated
     NotificationCenter.default.removeObserver(self)
     bootProgressMonitorActive = false
@@ -262,12 +182,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     ViewController.syWebView.configuration.userContentController.addScriptMessageHandler(
       self, contentWorld: .page, name: ScriptMessageName.finishKeyboardComposition.rawValue)
 
-    ViewController.syWebView.configuration.userContentController.addScriptMessageHandler(
-      self, contentWorld: .page, name: Self.mapBoundaryHandlerName)
-
-    // Set the capability flag only after both receiver and navigation policy are installed.
     ViewController.syWebView.navigationDelegate = self
-    nativeBridgePolicyInstalled = true
 
     // show keyboard
     ViewController.syWebView.scrollView.isScrollEnabled = false
@@ -465,40 +380,15 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       alpha: 1.0)
   }
 
-  private func revokeNativeBridgeDocument() {
-    committedBridgeDocument = nil
-    bridgeNavigationGeneration &+= 1
-  }
-
-  private func acceptsNativeBridgeMessage(
-    _ controller: WKUserContentController, _ message: WKScriptMessage
-  ) -> Bool {
-    let webView = ViewController.syWebView
-    let origin = message.frameInfo.securityOrigin
-    return NativeBridgePolicy.acceptsMessage(
-      policyInstalled: nativeBridgePolicyInstalled,
-      expectedWebView: message.webView === webView,
-      expectedController: controller === webView.configuration.userContentController,
-      expectedDelegate: webView.navigationDelegate === self,
-      isMainFrame: message.frameInfo.isMainFrame,
-      scheme: origin.protocol, host: origin.host, port: origin.port,
-      committedURL: committedBridgeDocument, currentURL: webView.url,
-      senderURL: message.frameInfo.request.url)
-  }
-
   func userContentController(
     _ userContentController: WKUserContentController, didReceive message: WKScriptMessage,
     replyHandler: @escaping (Any?, String?) -> Void
   ) {
-    guard acceptsNativeBridgeMessage(userContentController, message) else {
-      replyHandler(nil, "Untrusted or inactive native bridge document")
+    guard message.webView === ViewController.syWebView, message.frameInfo.isMainFrame else {
+      replyHandler(nil, "Unsupported keyboard composition source")
       return
     }
-    if message.name == Self.mapBoundaryHandlerName {
-      // 此能力只确认原生消息与页面导航边界，不表示网络隔离。
-      let capability: [String: Any] = ["version": 1, "enabled": true]
-      replyHandler(capability, nil)
-    } else if message.name == ScriptMessageName.finishKeyboardComposition.rawValue {
+    if message.name == ScriptMessageName.finishKeyboardComposition.rawValue {
       finishKeyboardComposition(message, replyHandler: replyHandler)
     } else {
       replyHandler(nil, "Unknown native bridge message")
@@ -508,7 +398,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   func userContentController(
     _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
   ) {
-    guard acceptsNativeBridgeMessage(userContentController, message) else { return }
     switch ScriptMessageName(rawValue: message.name) {
     case .startKernelFast:
       let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
@@ -563,13 +452,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       let body = dict!["body"] as? String ?? ""
       let delay = dict!["delay"] as? Int ?? 0
       let callback = dict!["callback"] as? String
-      let generation = bridgeNavigationGeneration
       sendNotification(channel: channel, title: title, body: body, delayInSeconds: delay) { id in
         // 异步将 ID 回传给 JS
         if let callbackName = callback {
-          DispatchQueue.main.async { [weak self] in
-            guard let self = self, self.bridgeNavigationGeneration == generation,
-              self.acceptsNativeBridgeMessage(userContentController, message) else { return }
+          DispatchQueue.main.async {
             ViewController.syWebView.evaluateJavaScript(callbackName + "(" + String(id) + ")")
           }
         }
@@ -645,30 +531,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
   ) {
-    // 子框架可以加载自身内容，但不能触发原生操作、顶层导航或启动页切换。
-    if webView === ViewController.syWebView || webView === bootWebView {
-      // Swift 声明为非空，旧版 WebKit 的原生 API 导航实际可能返回 nil。
-      let sourceFrame: WKFrameInfo? = navigationAction.sourceFrame
-      let policy = NativeBridgePolicy.navigationSourcePolicy(
-        sourceIsMainFrame: sourceFrame?.isMainFrame,
-        targetIsMainFrame: navigationAction.targetFrame?.isMainFrame,
-        requestURL: navigationAction.request.url,
-        isBootWebView: webView === bootWebView,
-        isNativeLoad: navigationAction.navigationType == .other
-          && navigationAction.request.httpMethod == "GET" && !navigationAction.shouldPerformDownload)
-      switch policy {
-      case .allowSubframe:
-        decisionHandler(.allow)
-        return
-      case .cancel:
-        decisionHandler(.cancel)
-        return
-      case .inspect:
-        break
-      }
-    }
     guard let url = navigationAction.request.url else {
-      decisionHandler(.cancel)
+      decisionHandler(.allow)
       return
     }
 
@@ -686,7 +550,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
 
     if webView === bootWebView, navigationAction.targetFrame?.isMainFrame == true,
-      isLocalKernelURL(url), !NativeBridgePolicy.isBootDocument(url)
+      isLocalKernelURL(url), !isBootDocument(url)
     {
       decisionHandler(.cancel)
       bootProgressMonitorActive = false
@@ -715,22 +579,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       decisionHandler(.cancel)
       UIApplication.shared.open(url, options: [:], completionHandler: nil)
     } else {
-      if webView === ViewController.syWebView, navigationAction.targetFrame?.isMainFrame == true {
-        // The root is a kernel redirect to the actual UI (or authentication page).
-        guard NativeBridgePolicy.isTrustedDocument(url)
-          || (isLocalKernelURL(url) && url.path == "/" && url.user == nil && url.password == nil)
-        else {
-          decisionHandler(.cancel)
-          return
-        }
-        if !NativeBridgePolicy.sameDocument(webView.url, url) {
-          revokeNativeBridgeDocument()
-        } else if navigationAction.navigationType == .reload {
-          revokeNativeBridgeDocument()
-        }
-        // Same-document back/forward may have no didCommit. A real document traversal
-        // is revoked by didStartProvisionalNavigation instead.
-      }
       decisionHandler(.allow)
     }
   }
@@ -739,7 +587,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     _ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
   ) {
-    if webView === ViewController.syWebView, navigationResponse.isForMainFrame,
+    if webView === ViewController.syWebView,
       let response = navigationResponse.response as? HTTPURLResponse,
       (200..<300).contains(response.statusCode),
       response.value(forHTTPHeaderField: "Content-Disposition")?.lowercased()
@@ -748,13 +596,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     {
       decisionHandler(.cancel)
       saveExportFile(uri: assetPath, requestID: "")
-      return
-    }
-
-    if webView === ViewController.syWebView, navigationResponse.isForMainFrame,
-      !NativeBridgePolicy.isTrustedDocument(navigationResponse.response.url) {
-      revokeNativeBridgeDocument()
-      decisionHandler(.cancel)
       return
     }
 
@@ -909,7 +750,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     mainPageReady = false
     forceDefaultBootAppearance = false
     ViewController.syWebView.isHidden = false
-    revokeNativeBridgeDocument()
     ViewController.syWebView.load(URLRequest(url: url))
   }
 
@@ -1075,11 +915,20 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
   }
 
+  // 保留 URL 中的目录末尾斜杠，识别静态文件服务的 index.html 重定向。
+  private func isBootDocument(_ url: URL?) -> Bool {
+    guard let url = url, url.scheme == "http", url.host == "127.0.0.1", url.port == 6806,
+      url.user == nil, url.password == nil,
+      let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else { return false }
+    return ["/appearance/boot/", "/appearance/boot/index.html"].contains(components.percentEncodedPath)
+  }
+
   private func isReadyMainPage(_ url: URL?) -> Bool {
     guard let url = url, isLocalKernelURL(url) else {
       return false
     }
-    return NativeBridgePolicy.isTrustedDocument(url)
+    return url.path.contains("/stage/build/") || url.path.contains("/check-auth")
   }
 
   private func isLocalKernelURL(_ url: URL) -> Bool {
@@ -1155,7 +1004,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     guard !webViewRecoveryScheduled else {
       return
     }
-    revokeNativeBridgeDocument()
     mainPageReady = false
     webViewRecoveryScheduled = true
     webViewRecoveryGeneration += 1
@@ -1392,7 +1240,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
     if webView == ViewController.syWebView {
-      committedBridgeDocument = NativeBridgePolicy.isTrustedDocument(webView.url) ? webView.url : nil
       keyboardShowed = false
       keyboardEndFrame = nil
       view.setNeedsLayout()
@@ -1401,9 +1248,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-    if webView === ViewController.syWebView { revokeNativeBridgeDocument() }
     guard let url = webView.url,
-      isLocalKernelURL(url), !NativeBridgePolicy.isBootDocument(url)
+      isLocalKernelURL(url), !isBootDocument(url)
     else {
       return
     }
@@ -1427,7 +1273,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     if webView == bootWebView {
       cancelWebViewRecovery()
       if let url = webView.url, isLocalKernelURL(url),
-        !NativeBridgePolicy.isBootDocument(url)
+        !isBootDocument(url)
       {
         bootProgressMonitorActive = false
         bootProgressTask?.cancel()
@@ -1476,7 +1322,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     guard webView == ViewController.syWebView || webView == bootWebView else {
       return
     }
-    if webView === ViewController.syWebView { revokeNativeBridgeDocument() }
     let recoverLoadedPage = mainPageReady
     forceDefaultBootAppearance = !kernelBootCompleted
     mainPageNavigationStarted = false
