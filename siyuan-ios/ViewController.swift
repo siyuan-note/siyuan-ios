@@ -1650,6 +1650,71 @@ private enum PhotoPickerError: Error {
   case cancelled
 }
 
+// 将加载完成和取消汇合到一次 continuation 恢复，兼容 Progress 晚于取消返回。
+private final class PhotoProviderLoad<Value>: @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuation: CheckedContinuation<Value, Error>?
+  private var pendingResult: Result<Value, Error>?
+  private var progress: Progress?
+  private var completed = false
+  private var cancelled = false
+
+  func setContinuation(_ continuation: CheckedContinuation<Value, Error>) -> Bool {
+    lock.lock()
+    if completed {
+      let result = pendingResult!
+      pendingResult = nil
+      lock.unlock()
+      continuation.resume(with: result)
+      return false
+    }
+    self.continuation = continuation
+    lock.unlock()
+    return true
+  }
+
+  func setProgress(_ progress: Progress) {
+    lock.lock()
+    let shouldCancel = cancelled
+    if !completed { self.progress = progress }
+    lock.unlock()
+    if shouldCancel { progress.cancel() }
+  }
+
+  func finish(_ result: Result<Value, Error>) {
+    lock.lock()
+    guard !completed else {
+      lock.unlock()
+      return
+    }
+    completed = true
+    let continuation = self.continuation
+    self.continuation = nil
+    progress = nil
+    if continuation == nil { pendingResult = result }
+    lock.unlock()
+    continuation?.resume(with: result)
+  }
+
+  func cancel() {
+    lock.lock()
+    guard !completed else {
+      lock.unlock()
+      return
+    }
+    completed = true
+    cancelled = true
+    let progress = self.progress
+    let continuation = self.continuation
+    self.progress = nil
+    self.continuation = nil
+    if continuation == nil { pendingResult = .failure(CancellationError()) }
+    lock.unlock()
+    progress?.cancel()
+    continuation?.resume(throwing: CancellationError())
+  }
+}
+
 // PhotoKit 分段交付原始资源，超过上限或取消时及时停止下载，不创建应用明文临时文件。
 private final class PhotoResourceRead: @unchecked Sendable {
   private let lock = NSLock()
@@ -1763,27 +1828,37 @@ extension ViewController: PHPickerViewControllerDelegate {
   }
 
   private func loadLivePhoto(_ provider: NSItemProvider) async throws -> PHLivePhoto {
-    try await withCheckedThrowingContinuation { continuation in
-      provider.loadObject(ofClass: PHLivePhoto.self) { object, error in
-        if let photo = object as? PHLivePhoto {
-          continuation.resume(returning: photo)
-        } else {
-          continuation.resume(throwing: error ?? PhotoPickerError.unavailable)
+    let state = PhotoProviderLoad<PHLivePhoto>()
+    return try await withTaskCancellationHandler(operation: {
+      try await withCheckedThrowingContinuation { continuation in
+        guard state.setContinuation(continuation) else { return }
+        let progress = provider.loadObject(ofClass: PHLivePhoto.self) { object, error in
+          if let photo = object as? PHLivePhoto {
+            state.finish(.success(photo))
+          } else {
+            state.finish(.failure(error ?? PhotoPickerError.unavailable))
+          }
         }
+        state.setProgress(progress)
       }
-    }
+    }, onCancel: { state.cancel() })
   }
 
   private func loadPhotoData(_ provider: NSItemProvider, identifier: String) async throws -> Data {
-    try await withCheckedThrowingContinuation { continuation in
-      provider.loadDataRepresentation(forTypeIdentifier: identifier) { data, error in
-        if let data = data, data.count <= 64 * 1024 * 1024 {
-          continuation.resume(returning: data)
-        } else {
-          continuation.resume(throwing: error ?? PhotoPickerError.tooLarge)
+    let state = PhotoProviderLoad<Data>()
+    return try await withTaskCancellationHandler(operation: {
+      try await withCheckedThrowingContinuation { continuation in
+        guard state.setContinuation(continuation) else { return }
+        let progress = provider.loadDataRepresentation(forTypeIdentifier: identifier) { data, error in
+          if let data = data, data.count <= 64 * 1024 * 1024 {
+            state.finish(.success(data))
+          } else {
+            state.finish(.failure(error ?? PhotoPickerError.tooLarge))
+          }
         }
+        state.setProgress(progress)
       }
-    }
+    }, onCancel: { state.cancel() })
   }
 
   private func readPhotoResource(_ resource: PHAssetResource) async throws -> Data {
