@@ -20,7 +20,10 @@ import AuthenticationServices
 import GameController
 import Iosk
 import PDFKit
+import Photos
+import PhotosUI
 import UIKit
+import UniformTypeIdentifiers
 import WebKit
 
 private enum ScriptMessageName: String {
@@ -38,6 +41,7 @@ private enum ScriptMessageName: String {
   case vibrate
   case openAuthURL
   case finishKeyboardComposition
+  case pickPhotos
 }
 
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate,
@@ -56,6 +60,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   private var pendingStatusBarAppearance: (color: UIColor, isDark: Bool)?
   private var windowControlInsetsPayload: String?
   private var windowControlLayoutRefreshPending = false
+  private var photoPickerReply: ((Any?, String?) -> Void)?
+  private var photoPickerRequestID: UUID?
+  private var photoPickerTask: Task<Void, Never>?
+  private var photoPickerTimeout: DispatchWorkItem?
   @available(iOS 26.0, *)
   private var isWindowedIPad: Bool {
     guard let window = view.window, let scene = window.windowScene,
@@ -181,6 +189,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, name: ScriptMessageName.openAuthURL.rawValue)
     ViewController.syWebView.configuration.userContentController.addScriptMessageHandler(
       self, contentWorld: .page, name: ScriptMessageName.finishKeyboardComposition.rawValue)
+    ViewController.syWebView.configuration.userContentController.addScriptMessageHandler(
+      self, contentWorld: .page, name: ScriptMessageName.pickPhotos.rawValue)
 
     ViewController.syWebView.navigationDelegate = self
 
@@ -390,9 +400,50 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
     if message.name == ScriptMessageName.finishKeyboardComposition.rawValue {
       finishKeyboardComposition(message, replyHandler: replyHandler)
+    } else if message.name == ScriptMessageName.pickPhotos.rawValue {
+      guard let url = ViewController.syWebView.url,
+        ["127.0.0.1", "localhost", "::1"].contains(url.host ?? ""),
+        message.frameInfo.securityOrigin.host == url.host,
+        message.frameInfo.securityOrigin.protocol == url.scheme,
+        message.frameInfo.securityOrigin.port == (url.port ?? 80),
+        url.path.hasPrefix("/stage/build/")
+      else {
+        replyHandler(nil, "Unsupported photo picker source")
+        return
+      }
+      pickPhotos(replyHandler: replyHandler)
     } else {
       replyHandler(nil, "Unknown native bridge message")
     }
+  }
+
+  private func pickPhotos(replyHandler: @escaping (Any?, String?) -> Void) {
+    guard photoPickerReply == nil, presentedViewController == nil else {
+      replyHandler(nil, "Photo picker is busy")
+      return
+    }
+    photoPickerReply = replyHandler
+    photoPickerRequestID = UUID()
+    var configuration = PHPickerConfiguration()
+    configuration.filter = .images
+    configuration.selectionLimit = 10
+    configuration.preferredAssetRepresentationMode = .current
+    configuration.selection = .ordered
+    let picker = PHPickerViewController(configuration: configuration)
+    picker.delegate = self
+    present(picker, animated: true)
+  }
+
+  private func finishPhotoPicker(_ files: [[String: String]]?, error: String?, requestID: UUID) {
+    guard photoPickerRequestID == requestID else { return }
+    photoPickerTimeout?.cancel()
+    photoPickerTimeout = nil
+    photoPickerTask?.cancel()
+    photoPickerTask = nil
+    let reply = photoPickerReply
+    photoPickerReply = nil
+    photoPickerRequestID = nil
+    reply?(files, error)
   }
 
   func userContentController(
@@ -1590,6 +1641,164 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       ViewController.syWebView.evaluateJavaScript(
         "window.handleSaveExportFileResult && window.handleSaveExportFileResult.apply(null, \(argumentsJSON));")
     }
+  }
+}
+
+private enum PhotoPickerError: Error {
+  case unavailable
+  case tooLarge
+  case cancelled
+}
+
+// PhotoKit 分段交付原始资源，超过上限或取消时及时停止下载，不创建应用明文临时文件。
+private final class PhotoResourceRead: @unchecked Sendable {
+  private let lock = NSLock()
+  private var bytes = Data()
+  private var requestID: PHAssetResourceDataRequestID?
+  private var failure: Error?
+
+  func setRequestID(_ id: PHAssetResourceDataRequestID) {
+    lock.lock()
+    requestID = id
+    let stopped = failure != nil
+    lock.unlock()
+    if stopped { PHAssetResourceManager.default().cancelDataRequest(id) }
+  }
+
+  func append(_ chunk: Data) {
+    lock.lock()
+    if failure == nil {
+      if bytes.count + chunk.count > 64 * 1024 * 1024 {
+        failure = PhotoPickerError.tooLarge
+        bytes.removeAll()
+      } else {
+        bytes.append(chunk)
+      }
+    }
+    let cancelID = failure != nil ? requestID : nil
+    lock.unlock()
+    if let id = cancelID { PHAssetResourceManager.default().cancelDataRequest(id) }
+  }
+
+  func cancel() {
+    lock.lock()
+    failure = PhotoPickerError.cancelled
+    bytes.removeAll()
+    let id = requestID
+    lock.unlock()
+    if let id = id { PHAssetResourceManager.default().cancelDataRequest(id) }
+  }
+
+  func finish(_ error: Error?) -> Result<Data, Error> {
+    lock.lock()
+    defer { lock.unlock() }
+    if let error = failure ?? error { return .failure(error) }
+    return .success(bytes)
+  }
+}
+
+extension ViewController: PHPickerViewControllerDelegate {
+  func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+    picker.dismiss(animated: true)
+    guard let requestID = photoPickerRequestID else { return }
+    if results.isEmpty {
+      finishPhotoPicker([], error: nil, requestID: requestID)
+      return
+    }
+    let timeout = DispatchWorkItem { [weak self] in
+      self?.finishPhotoPicker(nil, error: "Photo import timed out", requestID: requestID)
+    }
+    photoPickerTimeout = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + 120, execute: timeout)
+    photoPickerTask = Task { @MainActor [weak self] in
+      guard let self = self else { return }
+      do {
+        var files = [[String: String]]()
+        var totalBytes = 0
+        for result in results {
+          try Task.checkCancellation()
+          let provider = result.itemProvider
+          if provider.canLoadObject(ofClass: PHLivePhoto.self) {
+            let livePhoto = try await self.loadLivePhoto(provider)
+            let resources = PHAssetResource.assetResources(for: livePhoto)
+            guard let photo = resources.first(where: { $0.type == .photo }),
+              let video = resources.first(where: { $0.type == .pairedVideo })
+            else { throw PhotoPickerError.unavailable }
+            let pair = UUID().uuidString
+            for (resource, kind) in [(photo, "photo"), (video, "video")] {
+              let data = try await self.readPhotoResource(resource)
+              try Task.checkCancellation()
+              totalBytes += data.count
+              guard totalBytes <= 64 * 1024 * 1024 else { throw PhotoPickerError.tooLarge }
+              files.append([
+                "name": resource.originalFilename,
+                "mimeType": UTType(resource.uniformTypeIdentifier)?.preferredMIMEType ?? "application/octet-stream",
+                "data": data.base64EncodedString(), "pair": pair, "kind": kind,
+              ])
+            }
+          } else {
+            guard let identifier = provider.registeredTypeIdentifiers.first(where: {
+              UTType($0)?.conforms(to: .image) == true
+            }) else { throw PhotoPickerError.unavailable }
+            let data = try await self.loadPhotoData(provider, identifier: identifier)
+            try Task.checkCancellation()
+            totalBytes += data.count
+            guard totalBytes <= 64 * 1024 * 1024 else { throw PhotoPickerError.tooLarge }
+            let type = UTType(identifier)
+            var name = provider.suggestedName ?? UUID().uuidString
+            if URL(fileURLWithPath: name).pathExtension.isEmpty {
+              name += "." + (type?.preferredFilenameExtension ?? "jpg")
+            }
+            files.append([
+              "name": name, "mimeType": type?.preferredMIMEType ?? "application/octet-stream",
+              "data": data.base64EncodedString(), "pair": "", "kind": "photo",
+            ])
+          }
+        }
+        self.finishPhotoPicker(files, error: nil, requestID: requestID)
+      } catch {
+        self.finishPhotoPicker(nil, error: "Unable to import original photo resources", requestID: requestID)
+      }
+    }
+  }
+
+  private func loadLivePhoto(_ provider: NSItemProvider) async throws -> PHLivePhoto {
+    try await withCheckedThrowingContinuation { continuation in
+      provider.loadObject(ofClass: PHLivePhoto.self) { object, error in
+        if let photo = object as? PHLivePhoto {
+          continuation.resume(returning: photo)
+        } else {
+          continuation.resume(throwing: error ?? PhotoPickerError.unavailable)
+        }
+      }
+    }
+  }
+
+  private func loadPhotoData(_ provider: NSItemProvider, identifier: String) async throws -> Data {
+    try await withCheckedThrowingContinuation { continuation in
+      provider.loadDataRepresentation(forTypeIdentifier: identifier) { data, error in
+        if let data = data, data.count <= 64 * 1024 * 1024 {
+          continuation.resume(returning: data)
+        } else {
+          continuation.resume(throwing: error ?? PhotoPickerError.tooLarge)
+        }
+      }
+    }
+  }
+
+  private func readPhotoResource(_ resource: PHAssetResource) async throws -> Data {
+    let state = PhotoResourceRead()
+    return try await withTaskCancellationHandler(operation: {
+      try await withCheckedThrowingContinuation { continuation in
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+        let id = PHAssetResourceManager.default().requestData(for: resource, options: options,
+          dataReceivedHandler: { state.append($0) }, completionHandler: { error in
+            continuation.resume(with: state.finish(error))
+          })
+        state.setRequestID(id)
+      }
+    }, onCancel: { state.cancel() })
   }
 }
 
