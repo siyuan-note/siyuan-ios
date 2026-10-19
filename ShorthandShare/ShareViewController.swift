@@ -337,8 +337,8 @@ class ShareViewController: UIViewController, UITextViewDelegate {
             DispatchQueue.main.async {
                 self.textView.text = ""
                 self.placeholderLabel.isHidden = false
-                self.showSavedFeedback { [weak self] in
-                    self?.dismissExtension()
+                self.showSavedFeedback {
+                    self.dismissExtension()
                 }
             }
         }
