@@ -38,6 +38,7 @@ private enum ScriptMessageName: String {
   case vibrate
   case openAuthURL
   case finishKeyboardComposition
+  case showTextMenu
 }
 
 class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelegate,
@@ -56,6 +57,11 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   private var pendingStatusBarAppearance: (color: UIColor, isDark: Bool)?
   private var windowControlInsetsPayload: String?
   private var windowControlLayoutRefreshPending = false
+  private var textMenuVisible = false
+  private var textMenuRequestGeneration: UInt = 0
+  private var textMenuRect = CGRect.zero
+  @available(iOS 16.0, *)
+  private lazy var textMenuInteraction = UIEditMenuInteraction(delegate: self)
   @available(iOS 26.0, *)
   private var isWindowedIPad: Bool {
     guard let window = view.window, let scene = window.windowScene,
@@ -181,8 +187,13 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, name: ScriptMessageName.openAuthURL.rawValue)
     ViewController.syWebView.configuration.userContentController.addScriptMessageHandler(
       self, contentWorld: .page, name: ScriptMessageName.finishKeyboardComposition.rawValue)
+    ViewController.syWebView.configuration.userContentController.addScriptMessageHandler(
+      self, contentWorld: .page, name: ScriptMessageName.showTextMenu.rawValue)
 
     ViewController.syWebView.navigationDelegate = self
+    if #available(iOS 16.0, *) {
+      ViewController.syWebView.addInteraction(textMenuInteraction)
+    }
 
     // show keyboard
     ViewController.syWebView.scrollView.isScrollEnabled = false
@@ -385,13 +396,87 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     replyHandler: @escaping (Any?, String?) -> Void
   ) {
     guard message.webView === ViewController.syWebView, message.frameInfo.isMainFrame else {
-      replyHandler(nil, "Unsupported keyboard composition source")
+      replyHandler(nil, "Unsupported native bridge source")
       return
     }
     if message.name == ScriptMessageName.finishKeyboardComposition.rawValue {
       finishKeyboardComposition(message, replyHandler: replyHandler)
+    } else if message.name == ScriptMessageName.showTextMenu.rawValue {
+      guard let expectedText = message.body as? String,
+        let url = ViewController.syWebView.url,
+        ["127.0.0.1", "localhost", "::1"].contains(url.host ?? ""),
+        message.frameInfo.securityOrigin.host == url.host,
+        message.frameInfo.securityOrigin.protocol == url.scheme,
+        message.frameInfo.securityOrigin.port == (url.port ?? 80),
+        url.path.hasPrefix("/stage/build/")
+      else {
+        replyHandler(false, nil)
+        return
+      }
+      if expectedText.isEmpty {
+        textMenuRequestGeneration &+= 1
+        if #available(iOS 16.0, *) {
+          textMenuInteraction.dismissMenu()
+        } else {
+          UIMenuController.shared.hideMenu()
+        }
+        replyHandler(true, nil)
+      } else {
+        showNativeTextMenu(expectedText: expectedText, replyHandler: replyHandler)
+      }
     } else {
       replyHandler(nil, "Unknown native bridge message")
+    }
+  }
+
+  private func showNativeTextMenu(expectedText: String, replyHandler: @escaping (Any?, String?) -> Void) {
+    textMenuRequestGeneration &+= 1
+    let generation = textMenuRequestGeneration
+    let webView = ViewController.syWebView
+    guard webView.window != nil, presentedViewController == nil else {
+      replyHandler(false, nil)
+      return
+    }
+    // 在原生菜单显示前重新读取选区，避免延迟请求使用已经切换的文字位置。
+    webView.evaluateJavaScript("""
+      (() => {
+        const selection = getSelection();
+        if (!selection?.rangeCount || selection.isCollapsed || !selection.toString().trim()) return null;
+        const range = selection.getRangeAt(0);
+        const element = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+        const editor = element?.closest('.protyle-wysiwyg');
+        if (!editor?.contains(range.endContainer) || !editor.contains(document.activeElement)) return null;
+        const rect = range.getBoundingClientRect();
+        return {text: selection.toString(), x: rect.x, y: rect.y, width: rect.width, height: rect.height};
+      })()
+      """) { [weak self] result, error in
+      guard let self = self, self.textMenuRequestGeneration == generation,
+        error == nil, let value = result as? [String: Any],
+        value["text"] as? String == expectedText,
+        let x = value["x"] as? Double, let y = value["y"] as? Double,
+        let width = value["width"] as? Double, let height = value["height"] as? Double,
+        [x, y, width, height].allSatisfy({ $0.isFinite }), width > 0, height > 0
+      else {
+        replyHandler(false, nil)
+        return
+      }
+      let rect = CGRect(x: x, y: y, width: width, height: height)
+      guard webView.window != nil, rect.intersects(webView.bounds) else {
+        replyHandler(false, nil)
+        return
+      }
+      if #available(iOS 16.0, *) {
+        self.textMenuRect = rect
+        if self.textMenuVisible {
+          self.textMenuInteraction.updateVisibleMenuPosition(animated: false)
+        } else {
+          self.textMenuInteraction.presentEditMenu(with: UIEditMenuConfiguration(
+            identifier: nil, sourcePoint: CGPoint(x: rect.midX, y: rect.midY)))
+        }
+      } else {
+        UIMenuController.shared.showMenu(from: webView, rect: rect)
+      }
+      replyHandler(true, nil)
     }
   }
 
@@ -1639,6 +1724,29 @@ extension UIColor {
     Scanner(string: fullHex)
       .scanHexInt64(&hexComponent)
     return CGFloat(Double(hexComponent) / 255.0)
+  }
+}
+
+@available(iOS 16.0, *)
+extension ViewController: UIEditMenuInteractionDelegate {
+  func editMenuInteraction(
+    _ interaction: UIEditMenuInteraction, targetRectFor configuration: UIEditMenuConfiguration
+  ) -> CGRect {
+    return textMenuRect
+  }
+
+  func editMenuInteraction(
+    _ interaction: UIEditMenuInteraction, willPresentMenuFor configuration: UIEditMenuConfiguration,
+    animator: UIEditMenuInteractionAnimating
+  ) {
+    textMenuVisible = true
+  }
+
+  func editMenuInteraction(
+    _ interaction: UIEditMenuInteraction, willDismissMenuFor configuration: UIEditMenuConfiguration,
+    animator: UIEditMenuInteractionAnimating
+  ) {
+    textMenuVisible = false
   }
 }
 
