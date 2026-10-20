@@ -151,10 +151,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       return
     }
 
-    // 网页主题就绪前跟随系统外观，与系统启动屏保持一致。
-    let startupDark = traitCollection.userInterfaceStyle == .dark
-    let startupColor = UIColor.systemBackground.resolvedColor(with: traitCollection)
-    applyStatusBarAppearance(color: startupColor, isDark: startupDark)
+    // 启动阶段使用与启动屏和内核启动页一致的深色，正文就绪后再应用所选主题。
+    let startupColor = UIColor(
+      red: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1)
+    applyStatusBarAppearance(color: startupColor, isDark: true)
 
     initKernel()
 
