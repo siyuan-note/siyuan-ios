@@ -62,6 +62,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   private var windowControlInsetsPayload: String?
   private var windowControlLayoutRefreshPending = false
   private var textMenuVisible = false
+  private var webEditMenuVisible = false
   private var textMenuRequestGeneration: UInt = 0
   private var textMenuRect = CGRect.zero
   @available(iOS 16.0, *)
@@ -201,8 +202,14 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       self, contentWorld: .page, name: ScriptMessageName.pickPhotos.rawValue)
 
     ViewController.syWebView.navigationDelegate = self
+    ViewController.syWebView.uiDelegate = self
     if #available(iOS 16.0, *) {
       ViewController.syWebView.addInteraction(textMenuInteraction)
+    }
+    if #unavailable(iOS 16.4) {
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(notifyNativeTextMenuWillPresent),
+        name: UIMenuController.willShowMenuNotification, object: nil)
     }
 
     // show keyboard
@@ -451,6 +458,16 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
   }
 
+  @objc private func notifyNativeTextMenuWillPresent() {
+    guard let url = ViewController.syWebView.url,
+      ["127.0.0.1", "localhost", "::1"].contains(url.host ?? ""),
+      url.path.hasPrefix("/stage/build/")
+    else { return }
+    // 系统开始文字操作后，结束前端的块长按计时，不改变文字选区。
+    ViewController.syWebView.evaluateJavaScript(
+      "window.dispatchEvent(new Event('nativeTextMenuWillPresent'))", completionHandler: nil)
+  }
+
   private func showNativeTextMenu(expectedText: String, replyHandler: @escaping (Any?, String?) -> Void) {
     textMenuRequestGeneration &+= 1
     let generation = textMenuRequestGeneration
@@ -485,6 +502,11 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       let rect = CGRect(x: x, y: y, width: width, height: height)
       guard webView.window != nil, rect.intersects(webView.bounds) else {
         replyHandler(false, nil)
+        return
+      }
+      if self.webEditMenuVisible {
+        // WebKit 已显示文字菜单时沿用原生交互，避免补显菜单覆盖选择手柄。
+        replyHandler(true, nil)
         return
       }
       if #available(iOS 16.0, *) {
@@ -2011,6 +2033,21 @@ extension UIColor {
   }
 }
 
+extension ViewController: WKUIDelegate {
+  @available(iOS 16.4, *)
+  func webView(_ webView: WKWebView, willPresentEditMenuWithAnimator animator: UIEditMenuInteractionAnimating) {
+    guard webView === ViewController.syWebView else { return }
+    webEditMenuVisible = true
+    notifyNativeTextMenuWillPresent()
+  }
+
+  @available(iOS 16.4, *)
+  func webView(_ webView: WKWebView, willDismissEditMenuWithAnimator animator: UIEditMenuInteractionAnimating) {
+    guard webView === ViewController.syWebView else { return }
+    webEditMenuVisible = false
+  }
+}
+
 @available(iOS 16.0, *)
 extension ViewController: UIEditMenuInteractionDelegate {
   func editMenuInteraction(
@@ -2024,6 +2061,7 @@ extension ViewController: UIEditMenuInteractionDelegate {
     animator: UIEditMenuInteractionAnimating
   ) {
     textMenuVisible = true
+    notifyNativeTextMenuWillPresent()
   }
 
   func editMenuInteraction(
