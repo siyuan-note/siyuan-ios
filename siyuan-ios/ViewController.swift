@@ -1451,7 +1451,6 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
         kernelBootCompleted = true
         mainPageNavigationStarted = true
         forceDefaultBootAppearance = false
-        removeBootWebView()
       }
       ViewController.flushOIDCCallback()
     }

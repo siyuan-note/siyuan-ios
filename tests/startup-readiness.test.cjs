@@ -16,6 +16,9 @@ const status = (isReady, failed, pathname = "/stage/build/mobile/", stage = "") 
 test("HTML navigation alone does not acknowledge frontend startup", () => {
     assert.deepEqual(status(undefined, false), {ready: false, failed: false, stage: ""});
     assert.deepEqual(status(false, false), {ready: false, failed: false, stage: ""});
+    const navigation = source.slice(source.indexOf("func webView(_ webView: WKWebView, didFinish"),
+        source.indexOf("func webView(_ webView: WKWebView, didFail"));
+    assert.doesNotMatch(navigation, /removeBootWebView\(/, "the original boot page remains until the readiness poll succeeds");
 });
 
 test("frontend completion and visible failure stop native startup monitoring separately", () => {
