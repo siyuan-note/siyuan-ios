@@ -101,10 +101,11 @@ private final class MarkdownDirectoryPresenter: NSObject, NSFilePresenter {
     try MarkdownCore.synchronizeAndClose({ try file.synchronize() }, close:{ try file.close() })
   }
 
-  func follow(_ url: URL?, authorizedDirectory: URL? = nil) async {
+  func follow(_ url: URL?, authorizedDirectory: URL? = nil, afterSaveAs: Bool = false) async {
     current = url?.standardizedFileURL
     if let url = current, let grant = grant, grant.contains(url) { return }
-    if manual { return }
+    if manual && !afterSaveAs { return }
+    if afterSaveAs { manual = false }
     epoch += 1
     let ticket = epoch
     reset()

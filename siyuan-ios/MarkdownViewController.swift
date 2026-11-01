@@ -114,7 +114,7 @@ import WebKit
     applyTheme()
     if navigationController?.viewControllers.first !== self || navigationController?.presentingViewController != nil {
       navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem:.done, target:self, action:#selector(closeEditor))
-    }
+    } else { navigationItem.leftBarButtonItem = nil }
     if let error = initialError { initialError = nil; showError(message:error) }
     else if preferencesBlocked { showError() }
     if treeInitialized { foreground() }
@@ -158,6 +158,8 @@ import WebKit
   }
   @objc private func closeEditor() {
     guard !closing else { return }
+    guard let navigation = navigationController,
+      navigation.viewControllers.first !== self || navigation.presentingViewController != nil else { return }
     closing = true
     Task {
       defer { closing = false }
@@ -223,7 +225,9 @@ import WebKit
       guard epoch == documentEpoch else { throw MarkdownError.invalid }
       synchronizeResources()
       if action == "host:commitSaveAs", (result as? MarkdownJSON)?["kind"] as? String == "committed" {
-        await tree.follow(current?.url, authorizedDirectory:current?.scope); notify("tree-change")
+        if treeCandidate != nil { treeFollowAfterCancel = true }
+        else { await tree.follow(current?.url, authorizedDirectory:current?.scope, afterSaveAs:true) }
+        notify("tree-change")
       }
       return result
     }
@@ -264,6 +268,7 @@ import WebKit
       Self.visible.removeValue(forKey:session.id)
       session.onExternalChange = nil
       documentEpoch += 1; self.session = candidate.session; treeCandidate = nil; treeCommitted = ticket
+      treeFollowAfterCancel = false
       Self.visible[self.session.id] = WeakMarkdownController(self)
       self.session.onExternalChange = { [weak self] in self?.notify("external-change") }
       resourceGeneration = -1; synchronizeResources()
@@ -353,10 +358,16 @@ import WebKit
 
   private var current: MarkdownHost.Grant? { session.current.flatMap { session.grants[$0] } }
 
+  private var treeFollowAfterCancel = false
   private func cancelTreeCandidate() async {
     guard let candidate = treeCandidate else { return }
     treeCandidate = nil
     _ = try? await MarkdownHost.shared.request("releaseSession",payload:["sessionId":candidate.session.id,"targetGeneration":candidate.session.generation],sessionID:candidate.session.id)
+    if treeFollowAfterCancel {
+      treeFollowAfterCancel = false
+      await tree.follow(current?.url, authorizedDirectory:current?.scope, afterSaveAs:true)
+      notify("tree-change")
+    }
   }
   private func prepareTreeOpen(_ location: MarkdownJSON) async -> MarkdownJSON {
     guard !treeOpening, !closing, treeCandidate == nil else { return MarkdownCore.failure(MarkdownError.invalid) }

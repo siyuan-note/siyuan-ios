@@ -106,3 +106,20 @@ test("workspace exit remains deferred while Markdown opens or sessions are pendi
     assert.match(launcher, /guard pending\.isEmpty, !opening, MarkdownHost\.shared\.sessions\.isEmpty else \{ return \}/);
     assert.match(container, /MarkdownLauncher\.finishDeferredExit\(\)/);
 });
+
+test("navigation appearance clears a stale Done button and guards non-modal roots before session release", () => {
+    const appear = container.slice(container.indexOf("override func viewDidAppear"), container.indexOf("override func viewDidDisappear"));
+    assert.match(appear, /else \{ navigationItem\.leftBarButtonItem = nil \}/);
+    const close = container.slice(container.indexOf("@objc private func closeEditor"), container.indexOf("func notify"));
+    assert.ok(close.indexOf("guard let navigation") < close.indexOf('command("close")'));
+    assert.match(close, /navigation\.viewControllers\.first !== self \|\| navigation\.presentingViewController != nil/);
+});
+
+test("Save As can follow a manual root, deferring that follow while a tree candidate is reserved", () => {
+    const tree = read("siyuan-ios/MarkdownTree.swift");
+    assert.match(tree, /if manual && !afterSaveAs \{ return \}/);
+    assert.match(container, /if treeCandidate != nil \{ treeFollowAfterCancel = true \}/);
+    assert.match(container, /authorizedDirectory:current\?\.scope, afterSaveAs:true/);
+    const cancel = container.slice(container.indexOf("private func cancelTreeCandidate"), container.indexOf("private func prepareTreeOpen"));
+    assert.match(cancel, /await tree\.follow[^\n]+\n\s+notify\("tree-change"\)/);
+});

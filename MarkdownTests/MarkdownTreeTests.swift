@@ -66,6 +66,28 @@ import XCTest
     do { try await tree.choose(base); XCTFail("unknown preference schema must remain untouched") } catch {}
     XCTAssertEqual(try Data(contentsOf:file),original)
   }
+  func testManualRootOnlyFollowsOutsideSaveAs() async throws {
+    let base = try fixture(); defer { try? FileManager.default.removeItem(at:base) }
+    let original = base.appendingPathComponent("original")
+    let next = base.appendingPathComponent("next")
+    try FileManager.default.createDirectory(at:original,withIntermediateDirectories:true)
+    try FileManager.default.createDirectory(at:next,withIntermediateDirectories:true)
+    let a = original.appendingPathComponent("a.md"), b = next.appendingPathComponent("b.md")
+    try Data("a".utf8).write(to:a); try Data("b".utf8).write(to:b)
+    let tree = MarkdownTree(storage:base.appendingPathComponent("view.json"))
+    try await tree.choose(original)
+    let selected = await tree.state()
+    await tree.follow(b)
+    let unchanged = await tree.state()
+    XCTAssertEqual(unchanged["rootId"] as? String,selected["rootId"] as? String)
+    await tree.follow(a,authorizedDirectory:original,afterSaveAs:true)
+    let inside = await tree.state()
+    XCTAssertEqual(inside["rootId"] as? String,selected["rootId"] as? String)
+    await tree.follow(b,authorizedDirectory:next,afterSaveAs:true)
+    let moved = await tree.state()
+    XCTAssertNotEqual(moved["rootId"] as? String,selected["rootId"] as? String)
+    XCTAssertNotNil(moved["currentNodeId"])
+  }
   func testDeletedCurrentFileAndReplacedSubdirectoryLeaveRootNavigable() async throws {
     let base = try fixture(); defer { try? FileManager.default.removeItem(at:base) }
     let docs = base.appendingPathComponent("docs")
