@@ -88,7 +88,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
     for context in URLContexts {
       let url = context.url
-      if url.scheme == "siyuan" && url.host == "shorthand" {
+      if MarkdownCore.isLaunch(url), let root = window?.rootViewController {
+        MarkdownLauncher.present(from: root, url: MarkdownCore.accepts(url) ? url : nil)
+      } else if url.scheme == "siyuan" && url.host == "shorthand" {
         presentShorthand(text: url.query?.removingPercentEncoding)
       } else if isOIDCCallback(url) {
         ViewController.handleOIDCCallback(url)
@@ -262,7 +264,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
   func sceneDidBecomeActive(_ scene: UIScene) {
     (window?.rootViewController as? ViewController)?.refreshWindowControlLayout()
-    LANSyncBonjour.shared.start()
+    if window?.rootViewController is ViewController { LANSyncBonjour.shared.start() }
     let keepShorthandRoot = pendingShorthandShortcut
     pendingShorthandShortcut = false
     // App Intent（iOS 16+ 快捷指令/Siri，见 ShorthandAppShortcuts）入队的闪念请求：
@@ -307,6 +309,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     _ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem,
     completionHandler: @escaping (Bool) -> Void
   ) {
+    if shortcutItem.type == MarkdownLauncher.shortcut, let root = window?.rootViewController {
+      MarkdownLauncher.present(from: root)
+      completionHandler(true)
+      return
+    }
     if shortcutItem.type == "com.b3log.siyuan.shorthand" {
       presentShorthand()
     }

@@ -30,8 +30,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // 强引用静态运行时，使独立内核可以通过 C 接口创建自己的推理会话。
-    ocrRuntime = try? ORTEnv(loggingLevel: .warning)
     // Override point for customization after application launch.
     // 设置通知代理
     UNUserNotificationCenter.current().delegate = self
@@ -44,6 +42,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     _ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
     options: UIScene.ConnectionOptions
   ) -> UISceneConfiguration {
+    if connectingSceneSession.configuration.name == "Markdown Configuration" || options.shortcutItem?.type == MarkdownLauncher.shortcut || options.urlContexts.contains(where: { MarkdownCore.isLaunch($0.url) }) {
+      let configuration = UISceneConfiguration(name: "Markdown Configuration", sessionRole: connectingSceneSession.role)
+      configuration.delegateClass = MarkdownSceneDelegate.self
+      configuration.storyboard = nil
+      return configuration
+    }
+    // 只在工作空间入口准备内核运行时，独立 Markdown 场景不触发内核或 OCR 初始化。
+    if ocrRuntime == nil { ocrRuntime = try? ORTEnv(loggingLevel: .warning) }
     // Called when a new scene session is being created.
     // Use this method to select a configuration to create the new scene with.
     return UISceneConfiguration(

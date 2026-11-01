@@ -168,6 +168,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
     // js 中调用 swift
     ViewController.syWebView.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+    ViewController.syWebView.configuration.userContentController.add(self, name: "openMarkdownEditor")
     ViewController.syWebView.configuration.userContentController.add(
       self, name: ScriptMessageName.startKernelFast.rawValue)
     ViewController.syWebView.configuration.userContentController.add(
@@ -556,6 +557,15 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   func userContentController(
     _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
   ) {
+    if message.name == "openMarkdownEditor" {
+      guard message.webView === ViewController.syWebView, message.frameInfo.isMainFrame,
+        let url = ViewController.syWebView.url, ["127.0.0.1", "localhost", "::1"].contains(url.host ?? ""),
+        message.frameInfo.securityOrigin.host == url.host, message.frameInfo.securityOrigin.protocol == url.scheme,
+        message.frameInfo.securityOrigin.port == (url.port ?? 80),
+        url.path == "/stage/build/mobile" || url.path.hasPrefix("/stage/build/mobile/") else { return }
+      MarkdownLauncher.present(from: self)
+      return
+    }
     switch ScriptMessageName(rawValue: message.name) {
     case .startKernelFast:
       let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
@@ -601,8 +611,10 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     case .print:
       printDynamicHTML(message.body as! String)
     case .exit:
-      UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
-      exit(0)
+      MarkdownLauncher.requestWorkspaceExit {
+        UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
+        exit(0)
+      }
     case .sendNotification:
       let dict = message.body as? [String: Any]
       let channel = dict!["channel"] as? String ?? "default"

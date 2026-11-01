@@ -31,6 +31,12 @@
 		A1B2C3D5E5F6222200020301 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020302 /* AppIntents.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		A1B2C3D5E5F6222200020401 /* ShorthandDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */; };
 		A1B2C3D5E5F6222200020403 /* ShorthandDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */; };
+		A21115000000000000000101 /* MarkdownCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21115000000000000000001 /* MarkdownCore.swift */; };
+		A21115000000000000000102 /* MarkdownDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21115000000000000000002 /* MarkdownDocument.swift */; };
+		A21115000000000000000103 /* MarkdownHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21115000000000000000003 /* MarkdownHost.swift */; };
+		A21115000000000000000104 /* MarkdownViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21115000000000000000004 /* MarkdownViewController.swift */; };
+		A21115000000000000000105 /* MarkdownSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21115000000000000000005 /* MarkdownSceneDelegate.swift */; };
+		A21115000000000000000106 /* MarkdownTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21115000000000000000006 /* MarkdownTree.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,6 +92,12 @@
 		A1B2C3D5E5F6222200020302 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
 		A1B2C3D5E5F6222200020402 /* ShorthandDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandDraftStore.swift; sourceTree = "<group>"; };
 		B5C7EC7DA5CF3CC7C1257D81 /* ShorthandViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShorthandViewController.swift; sourceTree = "<group>"; };
+		A21115000000000000000001 /* MarkdownCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownCore.swift; sourceTree = "<group>"; };
+		A21115000000000000000002 /* MarkdownDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocument.swift; sourceTree = "<group>"; };
+		A21115000000000000000003 /* MarkdownHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownHost.swift; sourceTree = "<group>"; };
+		A21115000000000000000004 /* MarkdownViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownViewController.swift; sourceTree = "<group>"; };
+		A21115000000000000000005 /* MarkdownSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSceneDelegate.swift; sourceTree = "<group>"; };
+		A21115000000000000000006 /* MarkdownTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTree.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -149,6 +161,12 @@
 		268CE5A0275A68B400DFCFF8 /* siyuan-ios */ = {
 			isa = PBXGroup;
 			children = (
+				A21115000000000000000001 /* MarkdownCore.swift */,
+				A21115000000000000000002 /* MarkdownDocument.swift */,
+				A21115000000000000000003 /* MarkdownHost.swift */,
+				A21115000000000000000004 /* MarkdownViewController.swift */,
+				A21115000000000000000005 /* MarkdownSceneDelegate.swift */,
+				A21115000000000000000006 /* MarkdownTree.swift */,
 				26C9D7222FB0C22A00635896 /* siyuan-ios.entitlements */,
 				2675C37C2D8964DB00421174 /* IAPManager.swift */,
 				268CE5A1275A68B400DFCFF8 /* AppDelegate.swift */,
@@ -346,6 +364,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A21115000000000000000101 /* MarkdownCore.swift in Sources */,
+				A21115000000000000000102 /* MarkdownDocument.swift in Sources */,
+				A21115000000000000000103 /* MarkdownHost.swift in Sources */,
+				A21115000000000000000104 /* MarkdownViewController.swift in Sources */,
+				A21115000000000000000105 /* MarkdownSceneDelegate.swift in Sources */,
+				A21115000000000000000106 /* MarkdownTree.swift in Sources */,
 				A1B2C3D5E5F6222200020401 /* ShorthandDraftStore.swift in Sources */,
 				2675C37D2D8964E300421174 /* IAPManager.swift in Sources */,
 				268CE5A6275A68B400DFCFF8 /* ViewController.swift in Sources */,
