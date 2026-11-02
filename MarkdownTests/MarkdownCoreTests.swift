@@ -3,6 +3,11 @@ import XCTest
 @testable import MarkdownNative
 
 final class MarkdownCoreTests: XCTestCase {
+  func testIdentifiersSeparateOrdinaryIDsAndCapabilityTokens() {
+    XCTAssertNotNil(MarkdownCore.newID().range(of: "^[0-9]{14}-[a-z0-9]{7}$", options: .regularExpression))
+    XCTAssertNotNil(MarkdownCore.token().range(of: "^[0-9a-f]{64}$", options: .regularExpression))
+    XCTAssertNotEqual(MarkdownCore.token(), MarkdownCore.token())
+  }
   func testStrictUTF8BOMAndNewlineChoice() throws {
     let (text, format) = try MarkdownCore.decode(Data([0xef,0xbb,0xbf] + Array("one\r\ntwo\n".utf8)))
     XCTAssertEqual(text, "one\ntwo\n")

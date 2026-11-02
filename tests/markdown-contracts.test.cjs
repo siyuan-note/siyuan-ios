@@ -7,6 +7,13 @@ const read = name => readFileSync(join(__dirname, "..", name), "utf8");
 const host = read("siyuan-ios/MarkdownHost.swift");
 const container = read("siyuan-ios/MarkdownViewController.swift");
 
+test("standalone parser uses one exact bundled alias without widening the generic asset root", () => {
+    assert.match(container, /percentEncodedPath == "\/vditor\/dist\/js\/lute\/lute\.min\.js"/);
+    assert.match(container, /sharedLute \? Self\.appDirectory : Self\.assets/);
+    assert.match(container, /sharedLute \? "stage\/protyle\/js\/lute\/lute\.min\.js" : String\(url\.path\.dropFirst\(\)\)/);
+    assert.match(container, /guard Self\.inside\(root, file\) else/);
+});
+
 test("every shared bridge action is routed in the independent native container", () => {
     for (const action of ["bootstrap", "new", "open", "save-as", "cancel-save-as", "authorize-resources", "resource", "insert-image", "link", "preferences", "confirm", "confirm-close", "recoveries", "recover", "discard-recovery", "state", "response", "tree-state", "tree-list", "tree-choose-root", "tree-save-view", "tree-prepare-open", "tree-commit-open", "tree-cancel-open"]) {
         assert.ok(container.includes(`case "${action}"`), `Missing native action ${action}`);
@@ -122,4 +129,14 @@ test("Save As can follow a manual root, deferring that follow while a tree candi
     assert.match(container, /authorizedDirectory:current\?\.scope, afterSaveAs:true/);
     const cancel = container.slice(container.indexOf("private func cancelTreeCandidate"), container.indexOf("private func prepareTreeOpen"));
     assert.match(cancel, /await tree\.follow[^\n]+\n\s+notify\("tree-change"\)/);
+});
+
+
+test("tree public IDs use SiYuan IDs with stable saved expansion mappings", () => {
+    const tree = read("siyuan-ios/MarkdownTree.swift");
+    assert.match(tree, /let value = MarkdownCore\.newID\(\)/);
+    assert.ok(tree.includes('previous?["nodeIds"] as? [String:String] ?? [:]'));
+    assert.ok(tree.includes('Set(ids.values).union([rootID])'));
+    assert.ok(tree.includes('!ids.values.contains(id)'));
+    assert.ok(tree.includes('item["nodeIds"] = nodeIDs.filter { values.contains($0.value) }'));
 });

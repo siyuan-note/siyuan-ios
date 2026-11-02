@@ -10,6 +10,23 @@ enum MarkdownError: Error {
 }
 
 enum MarkdownCore {
+  // IDs follow SiYuan's timestamp/suffix format; authority tokens keep 256 random bits.
+  static func newID() -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.dateFormat = "yyyyMMddHHmmss"
+    let alphabet = Array("abcdefghijklmnopqrstuvwxyz0123456789")
+    var random = SystemRandomNumberGenerator()
+    let suffix = String((0..<7).map { _ in alphabet.randomElement(using: &random)! })
+    return formatter.string(from: Date()) + "-" + suffix
+  }
+
+  static func token() -> String {
+    var random = SystemRandomNumberGenerator()
+    return (0..<32).map { _ in String(format: "%02x", UInt8.random(in: .min ... .max, using: &random)) }.joined()
+  }
+
   static let documentLimit = 8 * 1024 * 1024
   static let recoveryContentLimit = 16 * 1024 * 1024
   static let recoveryLimit = 256 * 1024 * 1024

@@ -174,12 +174,13 @@ import WebKit
 
   func notify(_ type: String, extra: MarkdownJSON = [:]) {
     var message = extra
-    message["id"] = UUID().uuidString
+    message["id"] = MarkdownCore.newID()
     message["type"] = type
     javascript("__siyuanMarkdownCommand", value: message)
   }
   private func command(_ type: String) async -> Bool {
-    let id = UUID().uuidString
+    let id = MarkdownCore.newID()
+    guard replies[id] == nil else { return false }
     return await withCheckedContinuation { continuation in
       replies[id] = { continuation.resume(returning: $0) }
       javascript("__siyuanMarkdownCommand", value: ["id": id, "type": type])
@@ -382,7 +383,8 @@ import WebKit
       created = candidate
       let checked = try tree.file(location)
       guard epoch == documentEpoch, !closing, checked.0 == url else { throw MarkdownError.invalid }
-      let ticket = UUID().uuidString.lowercased()
+      let ticket = MarkdownCore.newID()
+      guard ticket != treeCommitted else { throw MarkdownError.invalid }
       treeCandidate = (ticket,candidate,epoch)
       return ["kind":"ready","ticket":ticket,"sessionId":candidate.id]
     } catch {
@@ -474,7 +476,7 @@ import WebKit
       return entry.key
     }
     guard resources.count < 1024 else { return nil }
-    let token = UUID().uuidString.lowercased()
+    let token = MarkdownCore.token()
     let grant = MarkdownResourceGrant(token:token, url:url, identity:snapshot.physicalIdentity,
       generation:session.generation, directory:imageFiles[url] == nil ? directory : nil)
     try grant.validate(generation:session.generation)
@@ -508,8 +510,11 @@ import WebKit
       guard let type = Self.imageTypes[resource.url.pathExtension.lowercased()] else { throw MarkdownError.invalid }
       return (resource.url, type, resource.identity, 32 * 1024 * 1024, resource)
     }
-    let root = Self.assets.resolvingSymlinksInPath()
-    let file = root.appendingPathComponent(String(url.path.dropFirst())).standardizedFileURL.resolvingSymlinksInPath()
+    // A single exact script alias reuses the packaged parser without exposing the app tree.
+    let sharedLute = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath == "/vditor/dist/js/lute/lute.min.js"
+    let root = (sharedLute ? Self.appDirectory : Self.assets).resolvingSymlinksInPath()
+    let relative = sharedLute ? "stage/protyle/js/lute/lute.min.js" : String(url.path.dropFirst())
+    let file = root.appendingPathComponent(relative).standardizedFileURL.resolvingSymlinksInPath()
     guard Self.inside(root, file) else { throw MarkdownError.invalid }
     let types = ["html": "text/html; charset=utf-8", "js": "text/javascript; charset=utf-8", "css": "text/css; charset=utf-8",
       "json": "application/json", "woff": "font/woff", "woff2": "font/woff2", "ttf": "font/ttf", "svg": "image/svg+xml"]

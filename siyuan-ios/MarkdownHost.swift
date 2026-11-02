@@ -5,8 +5,8 @@ import UIKit
   static let shared = MarkdownHost()
 
   final class Grant {
-    let handle = UUID().uuidString.lowercased()
-    let identity = UUID().uuidString.lowercased()
+    let handle = MarkdownCore.newID()
+    let identity = MarkdownCore.newID()
     let owner: String
     let document: MarkdownDocument
     let url: URL
@@ -55,7 +55,7 @@ import UIKit
       var result: MarkdownJSON?
       init(_ fingerprint: String) { self.fingerprint = fingerprint }
     }
-    let id = UUID().uuidString.lowercased()
+    let id = MarkdownCore.newID()
     var generation = 0
     var current: String?
     var initial = ""
@@ -114,6 +114,7 @@ import UIKit
 
   func create(url: URL? = nil, scope: URL? = nil) async throws -> Session {
     let session = Session()
+    guard sessions[session.id] == nil, try store().read(session.id) == nil else { throw MarkdownError.invalid }
     sessions[session.id] = session
     do {
       if let url = url {
@@ -158,7 +159,9 @@ import UIKit
       let grant = Grant(owner: session.id, url: canonical, scope: scope, document: document,
         snapshot: snapshot, format: format ?? decoded?.1 ?? ["bom": false, "newline": "\n"])
       _ = try MarkdownCore.encode("", format: grant.format)
-      if reserved { grant.reservation = UUID().uuidString.lowercased() }
+      if reserved { grant.reservation = MarkdownCore.newID() }
+      if let reservation = grant.reservation, session.grants.values.contains(where: { $0.reservation == reservation }) { throw MarkdownError.invalid }
+      guard session.grants[grant.handle] == nil else { throw MarkdownError.invalid }
       for alias in grant.aliases { claims[alias] = session.id }
       session.grants[grant.handle] = grant
       document.onExternalChange = { [weak session] in session?.onExternalChange?() }

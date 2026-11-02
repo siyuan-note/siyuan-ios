@@ -32,6 +32,7 @@ private final class MarkdownDirectoryPresenter: NSObject, NSFilePresenter {
   private var rootName = ""
   private var nodes: [String:Node] = [:]
   private var signatures: [String:String] = [:]
+  private var nodeIDs: [String:String] = [:]
   private var manual = false
   private var epoch = 0
   private var unavailable = false
@@ -60,7 +61,24 @@ private final class MarkdownDirectoryPresenter: NSObject, NSFilePresenter {
   }
 
   nonisolated private static func id(_ text: String) -> String { MarkdownCore.hash(Data(text.utf8)) }
-  nonisolated private static func validID(_ value: String) -> Bool { value.range(of:"^[a-f0-9]{64}$", options:.regularExpression) != nil }
+  nonisolated private static func validID(_ value: String) -> Bool { value.range(of:"^[0-9]{14}-[a-z0-9]{7}$", options:.regularExpression) != nil }
+  nonisolated private static func freshID(excluding used: Set<String>) throws -> String {
+    for _ in 0..<32 { let value = MarkdownCore.newID(); if !used.contains(value) { return value } }
+    throw MarkdownError.unavailable
+  }
+  // Detached directory reads return stable lookup fingerprints, not public IDs.
+  // Resolve them on the main actor and persist mappings only for expanded nodes.
+  nonisolated private static func identified(_ values: [Node], rootID: String, ids: inout [String:String]) throws -> [Node] {
+    var result: [Node] = []
+    for node in values {
+      if ids[node.id] == nil {
+        guard ids.count < 10_000 else { throw MarkdownError.size }
+        ids[node.id] = try freshID(excluding:Set(ids.values).union([rootID]))
+      }
+      result.append(Node(id:ids[node.id]!,url:node.url,identity:node.identity,directory:node.directory,parents:node.parents))
+    }
+    return result
+  }
   private static func record(at url: URL) throws -> MarkdownJSON {
     guard FileManager.default.fileExists(atPath:url.path) else { return ["version":1,"width":240,"visible":true,"roots":[]] }
     let value = try MarkdownCore.dictionary(JSONSerialization.jsonObject(with:Data(contentsOf:url)))
@@ -69,6 +87,11 @@ private final class MarkdownDirectoryPresenter: NSObject, NSFilePresenter {
     for root in roots {
       guard let id = root["id"] as? String, validID(id), let expanded = root["expanded"] as? [String], expanded.count <= 256,
         expanded.allSatisfy(validID), root["bookmark"] is String, root["scopeIdentity"] is String else { throw MarkdownError.invalid }
+      if let mappings = root["nodeIds"] {
+        guard let ids = mappings as? [String:String], ids.count <= 256, ids.keys.allSatisfy({ $0.range(of:"^[a-f0-9]{64}$", options:.regularExpression) != nil }),
+          ids.values.allSatisfy(validID), Set(ids.values).count == ids.count, !ids.values.contains(id) else { throw MarkdownError.invalid }
+      }
+      if let key = root["key"] { guard let text = key as? String, text.range(of:"^[a-f0-9]{64}$", options:.regularExpression) != nil else { throw MarkdownError.invalid } }
     }
     return value
   }
@@ -89,6 +112,7 @@ private final class MarkdownDirectoryPresenter: NSObject, NSFilePresenter {
         let values = patch["expanded"] as? [String], values.count <= 256, values.allSatisfy(Self.validID) else { throw MarkdownError.invalid }
       var item = roots.first { $0["id"] as? String == rootID } ?? ["id":rootID,"bookmark":"","scopeIdentity":""]
       item["expanded"] = Array(Set(values)).sorted()
+      item["nodeIds"] = nodeIDs.filter { values.contains($0.value) }
       roots.removeAll { $0["id"] as? String == rootID }; roots.insert(item, at:0)
       record["roots"] = Array(roots.prefix(16))
     }
@@ -138,7 +162,7 @@ private final class MarkdownDirectoryPresenter: NSObject, NSFilePresenter {
   }
   private func reset() {
     if scoped { scope?.stopAccessingSecurityScopedResource() }
-    scope = nil; scoped = false; grant = nil; rootID = ""; nodes.removeAll(); signatures.removeAll(); expanded = []; generation += 1
+    scope = nil; scoped = false; grant = nil; rootID = ""; nodes.removeAll(); signatures.removeAll(); nodeIDs.removeAll(); expanded = []; generation += 1
     updatePresenters()
   }
   func choose(_ url: URL) async throws {
@@ -149,19 +173,29 @@ private final class MarkdownDirectoryPresenter: NSObject, NSFilePresenter {
     let access = scope.startAccessingSecurityScopedResource()
     do {
       let captured = try MarkdownDirectoryGrant(root)
-      let identity = Self.id(captured.canonical.path + "\0" + captured.identity)
-      let rootNode = Node(id:identity,url:captured.canonical,identity:captured.identity,directory:true,parents:[])
-      let initial = try await Self.children(captured, directory:root, rootID:identity, parents:[rootNode])
-      guard epoch == ticket else { throw MarkdownError.invalid }
+      let key = Self.id(captured.canonical.path + "\0" + captured.identity)
       var record = try Self.record(at:storage)
       var roots = record["roots"] as? [MarkdownJSON] ?? []
-      let previous = roots.first { $0["id"] as? String == identity }
+      var previous = roots.first { $0["key"] as? String == key }
+      let identity = try (previous?["id"] as? String) ?? Self.freshID(excluding:Set(roots.compactMap { $0["id"] as? String }))
+      var mappings = previous?["nodeIds"] as? [String:String] ?? [:]
+      let rootNode = Node(id:identity,url:captured.canonical,identity:captured.identity,directory:true,parents:[])
+      let raw = try await Self.children(captured, directory:root, rootID:identity, parents:[rootNode])
+      guard epoch == ticket else { throw MarkdownError.invalid }
+      record = try Self.record(at:storage); roots = record["roots"] as? [MarkdownJSON] ?? []
+      previous = roots.first { $0["key"] as? String == key }
+      if let concurrent = previous?["id"] as? String, concurrent != identity { throw MarkdownError.unavailable }
+      guard !roots.contains(where: { $0["id"] as? String == identity && $0["key"] as? String != key }) else { throw MarkdownError.unavailable }
+      mappings = previous?["nodeIds"] as? [String:String] ?? [:]
+      let retained = Set(previous?["expanded"] as? [String] ?? [])
+      let initial = try Self.identified(raw, rootID:identity, ids:&mappings)
       let bookmark = (try? scope.bookmarkData(options:.minimalBookmark, includingResourceValuesForKeys:nil, relativeTo:nil).base64EncodedString()) ?? ""
       roots.removeAll { $0["id"] as? String == identity }
-      roots.insert(["id":identity,"bookmark":bookmark,"scopeIdentity":try MarkdownCore.directoryIdentity(scope),"expanded":previous?["expanded"] ?? []],at:0)
+      roots.insert(["id":identity,"key":key,"bookmark":bookmark,"scopeIdentity":try MarkdownCore.directoryIdentity(scope),"expanded":previous?["expanded"] ?? [],"nodeIds":mappings.filter { retained.contains($0.value) }],at:0)
       record["roots"] = Array(roots.prefix(16)); try write(record)
       reset(); self.grant = captured; self.scope = scope; scoped = access; self.manual = manual
       rootID = identity; rootName = root.lastPathComponent; unavailable = false
+      nodeIDs = mappings
       nodes[rootID] = Node(id:rootID,url:captured.canonical,identity:captured.identity,directory:true,parents:[])
       for node in initial { nodes[node.id] = node }
       signatures[rootID] = Self.signature(initial)
@@ -228,8 +262,9 @@ private final class MarkdownDirectoryPresenter: NSObject, NSFilePresenter {
       guard node.directory, node.parents.count < 64, let grant = grant else { throw MarkdownError.invalid }
       let ticket = generation
       let parents = node.parents.compactMap { nodes[$0] } + [node]
-      let entries = try await Self.children(grant,directory:node.url,rootID:rootID,parents:parents)
+      let raw = try await Self.children(grant,directory:node.url,rootID:rootID,parents:parents)
       guard ticket == generation else { throw MarkdownError.invalid }
+      let entries = try Self.identified(raw, rootID:rootID, ids:&nodeIDs)
       guard nodes.count + entries.filter({ nodes[$0.id] == nil }).count <= 10_000 else { throw MarkdownError.size }
       // 交付新列表前清除已失效的直接子节点及其后代。
       let valid = Set(entries.map(\.id))
@@ -287,8 +322,9 @@ private final class MarkdownDirectoryPresenter: NSObject, NSFilePresenter {
     do {
       for id in Set([rootID] + expanded) {
         guard let node = nodes[id], node.directory else { continue }
-        let values = try await Self.children(grant,directory:node.url,rootID:rootID,parents:node.parents.compactMap { nodes[$0] } + [node])
+        let raw = try await Self.children(grant,directory:node.url,rootID:rootID,parents:node.parents.compactMap { nodes[$0] } + [node])
         guard ticket == generation else { return false }
+        let values = try Self.identified(raw, rootID:rootID, ids:&nodeIDs)
         if signatures[id] != Self.signature(values) { return true }
       }
     } catch { return ticket == generation }
