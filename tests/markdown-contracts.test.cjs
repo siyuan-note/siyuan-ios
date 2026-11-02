@@ -140,3 +140,11 @@ test("tree public IDs use SiYuan IDs with stable saved expansion mappings", () =
     assert.ok(tree.includes('!ids.values.contains(id)'));
     assert.ok(tree.includes('item["nodeIds"] = nodeIDs.filter { values.contains($0.value) }'));
 });
+
+test("the initial bundled index and transparent scroll surface honor saved appearance", () => {
+    assert.match(container, /if url\.path == "\/index\.html", let html = String\(data: bytes, encoding: \.utf8\)/);
+    assert.match(container, /MarkdownCore\.initialPage\(html, dark: owner\.effectiveDark\)/);
+    assert.match(container, /webView\?\.scrollView\.backgroundColor = background/);
+    assert.match(container, /return theme == "dark" \|\| theme == "system" && traitCollection\.userInterfaceStyle == \.dark/);
+    assert.match(container, /webView\.isOpaque = false/);
+});

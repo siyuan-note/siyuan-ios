@@ -3,6 +3,13 @@ import XCTest
 @testable import MarkdownNative
 
 final class MarkdownCoreTests: XCTestCase {
+  func testFirstPageSelectsOnlyItsTrustedStylesheet() {
+    let html = "<link href=\"./appearance/themes/daylight/theme.css\"><script src=\"./index.js\"></script>"
+    XCTAssertEqual(MarkdownCore.initialPage(html, dark: true), html.replacingOccurrences(of: "daylight/theme.css", with: "midnight/theme.css"))
+    XCTAssertEqual(MarkdownCore.initialPage(html, dark: false), html)
+    XCTAssertTrue(MarkdownCore.initialPage("<link href=./appearance/themes/daylight/theme.css>", dark: true).contains("midnight/theme.css"))
+    XCTAssertEqual(MarkdownCore.initialPage("daylight document text", dark: true), "daylight document text")
+  }
   func testIdentifiersSeparateOrdinaryIDsAndCapabilityTokens() {
     XCTAssertNotNil(MarkdownCore.newID().range(of: "^[0-9]{14}-[a-z0-9]{7}$", options: .regularExpression))
     XCTAssertNotNil(MarkdownCore.token().range(of: "^[0-9a-f]{64}$", options: .regularExpression))

@@ -82,7 +82,7 @@ import WebKit
     webView.navigationDelegate = self
     webView.translatesAutoresizingMaskIntoConstraints = false
     webView.isOpaque = false
-    webView.backgroundColor = .systemBackground
+    updateSurfaceColors()
     view.addSubview(webView)
     NSLayoutConstraint.activate([
       webView.leadingAnchor.constraint(equalTo: view.leadingAnchor), webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -106,6 +106,7 @@ import WebKit
 
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
     super.traitCollectionDidChange(previousTraitCollection)
+    updateSurfaceColors()
     notify("theme", extra: ["dark": traitCollection.userInterfaceStyle == .dark])
   }
 
@@ -130,6 +131,20 @@ import WebKit
     let style: UIUserInterfaceStyle = theme == "dark" ? .dark : theme == "light" ? .light : .unspecified
     overrideUserInterfaceStyle = style
     navigationController?.overrideUserInterfaceStyle = style
+    updateSurfaceColors()
+  }
+
+  private func updateSurfaceColors() {
+    guard isViewLoaded else { return }
+    let background = effectiveDark ? UIColor(white: 30.0 / 255.0, alpha: 1) : UIColor.white
+    view.backgroundColor = background
+    webView?.backgroundColor = background
+    webView?.scrollView.backgroundColor = background
+  }
+
+  var effectiveDark: Bool {
+    let theme = preferences["theme"] as? String ?? "system"
+    return theme == "dark" || theme == "system" && traitCollection.userInterfaceStyle == .dark
   }
 
   @objc private func background() {
@@ -615,7 +630,9 @@ final class MarkdownSchemeHandler: NSObject, WKURLSchemeHandler {
               let policy = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
               let response = HTTPURLResponse(url:url, statusCode:200, httpVersion:"HTTP/1.1", headerFields:["Content-Type":resource.type, "Content-Security-Policy":policy, "X-Content-Type-Options":"nosniff", "Cache-Control":"no-store"])!
               urlSchemeTask.didReceive(response)
-              urlSchemeTask.didReceive(bytes)
+              if url.path == "/index.html", let html = String(data: bytes, encoding: .utf8) {
+                urlSchemeTask.didReceive(Data(MarkdownCore.initialPage(html, dark: owner.effectiveDark).utf8))
+              } else { urlSchemeTask.didReceive(bytes) }
               urlSchemeTask.didFinish()
             case .failure(let error):
               if let grant = resource.grant { owner.invalidateResource(grant) }

@@ -10,6 +10,10 @@ enum MarkdownError: Error {
 }
 
 enum MarkdownCore {
+  static func initialPage(_ html: String, dark: Bool) -> String {
+    guard dark, let range = html.range(of: "./appearance/themes/daylight/theme.css") else { return html }
+    return html.replacingCharacters(in: range, with: "./appearance/themes/midnight/theme.css")
+  }
   // IDs follow SiYuan's timestamp/suffix format; authority tokens keep 256 random bits.
   static func newID() -> String {
     let formatter = DateFormatter()
