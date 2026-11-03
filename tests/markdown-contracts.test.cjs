@@ -98,6 +98,12 @@ test("private recovery budget, preferences and resource lifetimes remain native 
     assert.match(container, /guard resourceGeneration != session\.generation/);
     assert.match(core, /selected\.resolvingSymlinksInPath\(\)\.standardizedFileURL == canonical/);
     assert.match(core, /MarkdownCore\.directoryIdentity\(canonical\) == identity/);
+    assert.match(host, /urls\(for: \.documentDirectory, in: \.userDomainMask\)/);
+    assert.match(host, /appendingPathComponent\("home\/\.config\/siyuan\/markdown", isDirectory: true\)/);
+    assert.match(host, /directory\.appendingPathComponent\("recovery", isDirectory: true\)/);
+    assert.match(host, /excluded\.isExcludedFromBackup = true/);
+    assert.match(core, /values\.isExcludedFromBackup = true/);
+    assert.doesNotMatch(host, /applicationSupportDirectory|appendingPathComponent\("MarkdownEditor"/);
 });
 
 test("Markdown file types are alternate in-place handlers and the scene has no workspace storyboard", () => {

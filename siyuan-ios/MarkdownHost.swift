@@ -94,8 +94,8 @@ import UIKit
   let directory: URL
   private var recovery: MarkdownRecoveryStore?
   init(directory providedDirectory: URL? = nil, recovery providedRecovery: MarkdownRecoveryStore? = nil) {
-    directory = providedDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("MarkdownEditor", isDirectory: true)
+    directory = providedDirectory ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("home/.config/siyuan/markdown", isDirectory: true)
     recovery = providedRecovery ?? (try? MarkdownRecoveryStore(directory: directory.appendingPathComponent("recovery", isDirectory: true)))
     var root = directory
     var excluded = URLResourceValues()
