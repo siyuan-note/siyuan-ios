@@ -7,6 +7,18 @@ const read = name => readFileSync(join(__dirname, "..", name), "utf8");
 const host = read("siyuan-ios/MarkdownHost.swift");
 const container = read("siyuan-ios/MarkdownViewController.swift");
 
+test("network rules allow image loads while retaining CSP and native navigation restrictions", () => {
+    const source = container.match(/let rules = """([\s\S]*?)"""/)[1];
+    const rules = JSON.parse(source);
+    assert.equal(rules[0].action.type, "block");
+    assert.deepEqual(rules[1].trigger["resource-type"], ["image"]);
+    assert.equal(rules[1].action.type, "ignore-previous-rules");
+    assert.equal(rules[0].trigger["url-filter"], "^https?://");
+    assert.equal(rules[1].trigger["url-filter"], "^https?://");
+    assert.match(container, /img-src [^;]*http: https:/);
+    assert.match(container, /connect-src 'none'; media-src 'none'; frame-src 'none'/);
+});
+
 test("standalone parser uses one exact bundled alias without widening the generic asset root", () => {
     assert.match(container, /percentEncodedPath == "\/vditor\/dist\/js\/lute\/lute\.min\.js"/);
     assert.match(container, /sharedLute \? Self\.appDirectory : Self\.assets/);

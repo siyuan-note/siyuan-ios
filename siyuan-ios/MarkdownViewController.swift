@@ -89,9 +89,10 @@ import WebKit
       webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor), webView.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor)
     ])
     let rules = """
-      [{"trigger":{"url-filter":"^https?://"},"action":{"type":"block"}}]
+      [{"trigger":{"url-filter":"^https?://"},"action":{"type":"block"}},
+       {"trigger":{"url-filter":"^https?://","resource-type":["image"]},"action":{"type":"ignore-previous-rules"}}]
       """
-    WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "siyuan-markdown-offline", encodedContentRuleList: rules) { [weak self] rules, error in
+    WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "siyuan-markdown-images", encodedContentRuleList: rules) { [weak self] rules, error in
       DispatchQueue.main.async {
         guard let self = self else { return }
         guard let rules = rules, error == nil else { self.showError(); return }
@@ -627,7 +628,7 @@ final class MarkdownSchemeHandler: NSObject, WKURLSchemeHandler {
             case .success(let bytes):
               do { if let grant = resource.grant { try owner.validateResource(grant) } }
               catch { urlSchemeTask.didFailWithError(error); return }
-              let policy = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+              let policy = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; font-src 'self' data:; connect-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
               let response = HTTPURLResponse(url:url, statusCode:200, httpVersion:"HTTP/1.1", headerFields:["Content-Type":resource.type, "Content-Security-Policy":policy, "X-Content-Type-Options":"nosniff", "Cache-Control":"no-store"])!
               urlSchemeTask.didReceive(response)
               if url.path == "/index.html", let html = String(data: bytes, encoding: .utf8) {
