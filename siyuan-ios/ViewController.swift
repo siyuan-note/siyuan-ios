@@ -17,6 +17,7 @@
  */
 
 import AuthenticationServices
+import AVFoundation
 import GameController
 import Iosk
 import PDFKit
@@ -2045,6 +2046,22 @@ extension UIColor {
 }
 
 extension ViewController: WKUIDelegate {
+  @available(iOS 15.0, *)
+  func webView(
+    _ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+    initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,
+    decisionHandler: @escaping (WKPermissionDecision) -> Void
+  ) {
+    let trusted = webView === ViewController.syWebView && frame.isMainFrame
+      && origin.protocol == "http" && origin.host == "127.0.0.1" && origin.port == 6806
+      && frame.securityOrigin.protocol == origin.protocol && frame.securityOrigin.host == origin.host
+      && frame.securityOrigin.port == origin.port
+      && webView.url.map { isLocalKernelURL($0) } == true
+    decisionHandler(
+      trusted && type == .microphone && AVAudioSession.sharedInstance().recordPermission == .granted
+        ? .grant : .prompt)
+  }
+
   @available(iOS 16.4, *)
   func webView(_ webView: WKWebView, willPresentEditMenuWithAnimator animator: UIEditMenuInteractionAnimating) {
     guard webView === ViewController.syWebView else { return }
