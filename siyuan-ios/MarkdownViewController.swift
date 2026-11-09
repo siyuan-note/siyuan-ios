@@ -27,6 +27,10 @@ import WebKit
   private let languages: [String: String]
   private let language: String
   private var preferences: MarkdownJSON
+  private var appearance: MarkdownJSON?
+  private var appearanceTokens: Set<String> = []
+  private var appearanceEpoch = 0
+  private var appearanceClosed = false
   private var preferencesBlocked = false
   private var ruleList: WKContentRuleList?
   var initialError: String?
@@ -58,6 +62,8 @@ import WebKit
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
   deinit {
     treePoll?.cancel()
+    let id = containerID
+    Task { await MarkdownAppearanceStore.shared.close(id) }
     for url in resourceScopes { url.stopAccessingSecurityScopedResource() }
   }
   func text(_ key: String) -> String { languages[key] ?? key }
@@ -129,7 +135,7 @@ import WebKit
   }
 
   private func applyTheme() {
-    let theme = preferences["theme"] as? String
+    let theme = appearance?["theme"] as? String ?? preferences["theme"] as? String
     let style: UIUserInterfaceStyle = theme == "dark" ? .dark : theme == "light" ? .light : .unspecified
     overrideUserInterfaceStyle = style
     navigationController?.overrideUserInterfaceStyle = style
@@ -145,7 +151,7 @@ import WebKit
   }
 
   var effectiveDark: Bool {
-    let theme = preferences["theme"] as? String ?? "system"
+    let theme = appearance?["theme"] as? String ?? preferences["theme"] as? String ?? "system"
     return theme == "dark" || theme == "system" && traitCollection.userInterfaceStyle == .dark
   }
 
@@ -182,6 +188,7 @@ import WebKit
       defer { closing = false }
       await cancelTreeCandidate()
       guard await command("close"), MarkdownHost.shared.sessions[session.id] == nil else { return }
+      closeAppearance()
       Self.visible.removeValue(forKey: session.id)
       if navigationController?.viewControllers.first === self { navigationController?.dismiss(animated: true) }
       else { navigationController?.popViewController(animated: true) }
@@ -256,8 +263,10 @@ import WebKit
       return fonts
     case "bootstrap":
       if !treeInitialized { treeInitialized = true; await tree.follow(current?.url, authorizedDirectory:current?.scope); foreground() }
+      let resolvedAppearance = try await loadAppearance()
       var bootstrap: MarkdownJSON = ["sessionId": session.id, "content": session.initial, "format": session.format,
-        "preferences": preferences, "capabilities": ["systemFonts": true], "languages": languages, "lang": language, "platform": "ios", "dark": traitCollection.userInterfaceStyle == .dark]
+        "preferences": preferences, "appearance": resolvedAppearance,
+        "capabilities": ["systemFonts": true, "workspaceAppearance": true], "languages": languages, "lang": language, "platform": "ios", "dark": traitCollection.userInterfaceStyle == .dark]
       if let current = current {
         var target = current.target
         target["baseline"] = session.restoredBaseline ?? current.baseline
@@ -345,11 +354,10 @@ import WebKit
       return NSNull()
     case "preferences":
       let patch = try MarkdownCore.dictionary(payload)
-      let next = try MarkdownHost.shared.preferences(patch:patch)
-      preferences = next
-      preferencesBlocked = false
-      applyTheme()
-      return next
+      _ = try await loadAppearance(preferencePatch: patch)
+      return preferences
+    case "appearance":
+      return try await loadAppearance(patch: payload is NSNull || payload == nil ? nil : MarkdownCore.dictionary(payload))
     case "confirm":
       guard let operation = payload as? String, let key = ["reload": "markdownReloadConfirm", "overwrite": "markdownOverwriteConfirm", "save-as": "markdownRelativeLinks"][operation] else { return false }
       return await confirm(key)
@@ -522,6 +530,59 @@ import WebKit
   func invalidateResource(_ grant: MarkdownResourceGrant) { resources.removeValue(forKey:grant.token) }
   static func inside(_ root: URL, _ file: URL) -> Bool { file.path.hasPrefix(root.path.hasSuffix("/") ? root.path : root.path + "/") }
 
+  private func loadAppearance(patch: MarkdownJSON? = nil, preferencePatch: MarkdownJSON? = nil) async throws -> MarkdownJSON {
+    guard !appearanceClosed else { throw MarkdownError.unavailable }
+    appearanceEpoch += 1
+    let epoch = appearanceEpoch
+    let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    let raw = try await MarkdownAppearanceStore.shared.resolve(containerID, root: root,
+      directory: MarkdownHost.shared.directory, patch: patch.map { try String(decoding: MarkdownCore.jsonData($0), as: UTF8.self) },
+      preferencePatch: preferencePatch.map { try String(decoding: MarkdownCore.jsonData($0), as: UTF8.self) })
+    guard !appearanceClosed, epoch == appearanceEpoch, let data = raw.data(using: .utf8) else { throw MarkdownError.invalid }
+    let result = try MarkdownCore.dictionary(JSONSerialization.jsonObject(with: data))
+    guard let nextPreferences = result["preferences"] as? MarkdownJSON,
+      var resolved = result["appearance"] as? MarkdownJSON else { throw MarkdownError.invalid }
+    var tokens = Set<String>()
+    var faces: [MarkdownJSON] = []
+    for var face in resolved["customFonts"] as? [MarkdownJSON] ?? [] {
+      guard let path = face["url"] as? String, path.hasPrefix("/appearance-font/") else { throw MarkdownError.invalid }
+      let token = String(path.dropFirst("/appearance-font/".count))
+      guard token.range(of: "^[a-f0-9]{48}$", options: .regularExpression) != nil else { throw MarkdownError.invalid }
+      tokens.insert(token)
+      face["url"] = "\(MarkdownCore.scheme)://\(containerID)/appearance-font/\(token)"
+      faces.append(face)
+    }
+    resolved["customFonts"] = faces
+    preferences = nextPreferences
+    appearance = resolved
+    appearanceTokens = tokens
+    preferencesBlocked = false
+    applyTheme()
+    return resolved
+  }
+
+  private func closeAppearance() {
+    appearanceClosed = true
+    appearanceEpoch += 1
+    appearanceTokens.removeAll()
+    let id = containerID
+    Task { await MarkdownAppearanceStore.shared.close(id) }
+  }
+
+  func appearanceFont(_ request: URLRequest) async throws -> (Data, String) {
+    guard !appearanceClosed, request.httpMethod == "GET", let url = request.url,
+      let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      url.scheme == MarkdownCore.scheme, url.host == containerID,
+      parts.query == nil, parts.fragment == nil, parts.user == nil, parts.password == nil, parts.port == nil,
+      parts.percentEncodedPath == url.path, url.path.hasPrefix("/appearance-font/") else { throw MarkdownError.invalid }
+    let token = String(url.path.dropFirst("/appearance-font/".count))
+    guard appearanceTokens.contains(token) else { throw MarkdownError.invalid }
+    let epoch = appearanceEpoch
+    let bytes = try await MarkdownAppearanceStore.shared.readFont(containerID, token: token)
+    guard !appearanceClosed, epoch == appearanceEpoch, appearanceTokens.contains(token) else { throw MarkdownError.invalid }
+    return (bytes, bytes.prefix(4) == Data("OTTO".utf8) ? "font/otf" : "font/ttf")
+  }
+
   func protocolResource(_ request: URLRequest) throws -> (url: URL, type: String, identity: String?, maximum: Int, grant: MarkdownResourceGrant?) {
     guard request.httpMethod == "GET", let url = request.url, url.scheme == MarkdownCore.scheme, url.host == containerID else { throw MarkdownError.invalid }
     if url.path.hasPrefix("/resource/") {
@@ -580,6 +641,7 @@ import WebKit
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
     guard !rendererTerminated else { return }
     rendererTerminated = true
+    closeAppearance()
     replies.values.forEach { $0(false) }
     replies.removeAll()
     Task {
@@ -599,6 +661,64 @@ final class WeakMarkdownController {
   weak var value: MarkdownViewController?
   init(_ value: MarkdownViewController) { self.value = value }
 }
+
+// 所有窗口共用串行偏好事务；Go 解析及字体读取不占用主线程。
+private actor MarkdownAppearanceStore {
+  static let shared = MarkdownAppearanceStore()
+  private var resolvers: [String: MobileMarkdownAppearance] = [:]
+
+  func resolve(_ id: String, root: URL, directory: URL, patch: String?, preferencePatch: String?) throws -> String {
+    let resolver: MobileMarkdownAppearance
+    if let existing = resolvers[id] {
+      resolver = existing
+    } else {
+      var error: NSError?
+      guard let created = MobileNewMarkdownAppearance(directory.path, root.path, &error) else {
+        if let error = error { throw error }
+        throw MarkdownError.unavailable
+      }
+      resolvers[id] = created
+      resolver = created
+    }
+    do {
+      let file = directory.appendingPathComponent("preferences.json")
+      let persisted = try MarkdownCore.preferences(at: file)
+      var current = persisted
+      if let preferencePatch = preferencePatch, let data = preferencePatch.data(using: .utf8) {
+        let legacyPatch = try MarkdownCore.dictionary(JSONSerialization.jsonObject(with: data))
+        guard Set(legacyPatch.keys).isSubset(of: ["mode", "theme", "fontSize", "fonts"]) else { throw MarkdownError.invalid }
+        current.merge(legacyPatch) { _, new in new }
+        var independent = current["independent"] as? MarkdownJSON ?? [:]
+        for key in ["theme", "fontSize", "fonts"] {
+          if let value = legacyPatch[key] { independent[key] = value }
+        }
+        if !independent.isEmpty { current["independent"] = independent }
+        guard MarkdownCore.validPreferences(current) else { throw MarkdownError.invalid }
+      }
+      let preferences = String(decoding: try MarkdownCore.jsonData(current), as: UTF8.self)
+      let raw = try resolver.resolve(preferences, patch: patch ?? "")
+      guard let data = raw.data(using: .utf8),
+        let result = try JSONSerialization.jsonObject(with: data) as? MarkdownJSON,
+        let normalized = result["preferences"] as? MarkdownJSON else { throw MarkdownError.invalid }
+      try MarkdownCore.persistResolvedPreferences(at: file, previous: persisted, resolved: normalized)
+      return String(decoding: data, as: UTF8.self)
+    } catch {
+      resolver.close()
+      resolvers.removeValue(forKey: id)
+      throw error
+    }
+  }
+
+  func readFont(_ id: String, token: String) throws -> Data {
+    guard let resolver = resolvers[id], let data = try resolver.readFont(token) else { throw MarkdownError.unavailable }
+    return data
+  }
+
+  func close(_ id: String) {
+    resolvers.removeValue(forKey: id)?.close()
+  }
+}
+
 final class WeakMarkdownScriptHandler: NSObject, WKScriptMessageHandler {
   weak var delegate: WKScriptMessageHandler?
   init(_ delegate: WKScriptMessageHandler) { self.delegate = delegate }
@@ -617,6 +737,23 @@ final class MarkdownSchemeHandler: NSObject, WKURLSchemeHandler {
       guard let self = self, let owner = self.owner else { return }
       let id = ObjectIdentifier(urlSchemeTask)
       self.active.insert(id)
+      if urlSchemeTask.request.url?.path.hasPrefix("/appearance-font/") == true {
+        Task { @MainActor [weak self, weak owner] in
+          guard let self = self, let owner = owner else { return }
+          do {
+            let (bytes, type) = try await owner.appearanceFont(urlSchemeTask.request)
+            guard self.active.remove(id) != nil, let url = urlSchemeTask.request.url else { return }
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+              headerFields: ["Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"])!
+            urlSchemeTask.didReceive(response)
+            urlSchemeTask.didReceive(bytes)
+            urlSchemeTask.didFinish()
+          } catch {
+            if self.active.remove(id) != nil { urlSchemeTask.didFailWithError(error) }
+          }
+        }
+        return
+      }
       do {
         let resource = try owner.protocolResource(urlSchemeTask.request)
         self.reads.async {

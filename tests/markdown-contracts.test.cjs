@@ -94,7 +94,9 @@ test("private recovery budget, preferences and resource lifetimes remain native 
     assert.match(core, /recoveryContentLimit = 16 \* 1024 \* 1024/);
     assert.match(host, /maximum:MarkdownCore\.recoveryContentLimit/);
     assert.match(core, /maximum: MarkdownCore\.recoveryContentLimit/);
-    assert.match(container, /MarkdownHost\.shared\.preferences\(patch:patch\)/);
+    assert.match(container, /private actor MarkdownAppearanceStore/);
+    assert.match(container, /MarkdownCore\.preferences\(at: file\)/);
+    assert.match(container, /MarkdownCore\.persistResolvedPreferences\(at: file, previous: persisted, resolved: normalized\)/);
     assert.match(container, /guard resourceGeneration != session\.generation/);
     assert.match(core, /selected\.resolvingSymlinksInPath\(\)\.standardizedFileURL == canonical/);
     assert.match(core, /MarkdownCore\.directoryIdentity\(canonical\) == identity/);
@@ -169,9 +171,39 @@ test("the initial bundled index and transparent scroll surface honor saved appea
 
 test("system font enumeration runs off the main actor without starting the kernel", () => {
     assert.match(container, /case "system-fonts":[\s\S]*Task\.detached\(priority: \.userInitiated\)[\s\S]*MobileGetSysFonts/);
-    assert.match(container, /"capabilities": \["systemFonts": true\]/);
+    assert.match(container, /"capabilities": \["systemFonts": true, "workspaceAppearance": true\]/);
     assert.doesNotMatch(container, /MobileStartKernel|MobileExit/);
     const core = read("siyuan-ios/MarkdownCore.swift");
     assert.match(core, /validFonts\(value\["fonts"\]\)/);
     assert.match(core, /\(1\.\.\.1000\)\.contains\(weight\)/);
+});
+
+test("workspace appearance uses a native root and serial read resolve persist without a kernel boot", () => {
+    assert.match(container, /case "appearance":/);
+    assert.match(container, /urls\(for: \.documentDirectory, in: \.userDomainMask\)\[0\]/);
+    assert.match(container, /directory: MarkdownHost\.shared\.directory/);
+    const store = container.slice(container.indexOf("private actor MarkdownAppearanceStore"), container.indexOf("final class WeakMarkdownScriptHandler"));
+    assert.match(store, /MobileNewMarkdownAppearance\(directory\.path, root\.path, &error\)/);
+    assert.ok(store.indexOf("MarkdownCore.preferences(at: file)") < store.indexOf("resolver.resolve("));
+    assert.ok(store.indexOf("resolver.resolve(") < store.indexOf("persistResolvedPreferences(at: file"));
+    assert.match(store, /let persisted = try MarkdownCore\.preferences\(at: file\)\s*var current = persisted/);
+    assert.match(store, /previous: persisted, resolved: normalized/);
+    assert.match(store, /catch \{\s*resolver\.close\(\)\s*resolvers\.removeValue/);
+    assert.match(container, /let theme = appearance\?\["theme"\] as\? String \?\? preferences\["theme"\]/);
+    assert.doesNotMatch(store, /MobileStartKernel|MobileInit|createDirectory/);
+});
+
+test("workspace font resources remain session bound and reject stale or encoded URLs", () => {
+    const resource = container.slice(container.indexOf("func appearanceFont("), container.indexOf("func protocolResource("));
+    assert.match(resource, /request\.httpMethod == "GET"/);
+    assert.match(resource, /url\.host == containerID/);
+    assert.match(resource, /parts\.percentEncodedPath == url\.path/);
+    assert.match(resource, /parts\.query == nil, parts\.fragment == nil/);
+    assert.match(resource, /appearanceTokens\.contains\(token\)/);
+    assert.match(resource, /await MarkdownAppearanceStore\.shared\.readFont/);
+    assert.match(resource, /guard !appearanceClosed, epoch == appearanceEpoch, appearanceTokens\.contains\(token\)/);
+    assert.doesNotMatch(resource, /base64|Data\(contentsOf:/);
+    assert.match(container, /appearanceTokens\.removeAll\(\)/);
+    assert.match(container, /rendererTerminated = true\s*closeAppearance\(\)/);
+    assert.match(container, /guard self\.active\.remove\(id\) != nil/);
 });

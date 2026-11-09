@@ -52,13 +52,32 @@ enum MarkdownCore {
   }
 
   static func validPreferences(_ value: MarkdownJSON) -> Bool {
-    Set(value.keys).isSubset(of: ["mode", "theme", "fontSize", "fonts"]) &&
+    Set(value.keys).isSubset(of: ["mode", "theme", "fontSize", "fonts", "sources", "independent"]) &&
       ["ir", "wysiwyg", "sv"].contains(value["mode"] as? String ?? "") &&
       ["system", "light", "dark"].contains(value["theme"] as? String ?? "") &&
-      (9...72).contains(value["fontSize"] as? Int ?? 0) && validFonts(value["fonts"])
+      (9...72).contains(value["fontSize"] as? Int ?? 0) && validFonts(value["fonts"]) &&
+      validAppearanceSources(value["sources"]) && validIndependentAppearance(value["independent"])
   }
 
-  // 宿主在 MainActor 上同步读合并写；各窗口不以自己的旧快照覆盖其他窗口的偏好。
+  static func validAppearanceSources(_ value: Any?) -> Bool {
+    guard let value = value else { return true }
+    guard let sources = value as? MarkdownJSON, Set(sources.keys).isSubset(of: ["theme", "fontSize", "fonts"]) else { return false }
+    return sources.values.allSatisfy { source in
+      guard let id = source as? String else { return false }
+      return id == "independent" || id.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil
+    }
+  }
+
+  static func validIndependentAppearance(_ value: Any?) -> Bool {
+    guard let value = value else { return true }
+    guard let independent = value as? MarkdownJSON,
+      Set(independent.keys).isSubset(of: ["theme", "fontSize", "fonts"]) else { return false }
+    if let theme = independent["theme"], !["system", "light", "dark"].contains(theme as? String ?? "") { return false }
+    if let size = independent["fontSize"], !(9...72).contains(size as? Int ?? 0) { return false }
+    return validFonts(independent["fonts"])
+  }
+
+  // 调用方串行读合并写，各窗口不以自己的旧快照覆盖其他窗口的偏好。
   static func preferences(at url: URL, patch: MarkdownJSON? = nil) throws -> MarkdownJSON {
     var value: MarkdownJSON = ["mode":"ir", "theme":"system", "fontSize":16]
     if FileManager.default.fileExists(atPath: url.path) {
@@ -70,11 +89,21 @@ enum MarkdownCore {
     guard let patch = patch else { return value }
     guard Set(patch.keys).isSubset(of:["mode", "theme", "fontSize", "fonts"]) else { throw MarkdownError.invalid }
     value.merge(patch) { _, new in new }
+    return try replacePreferences(at: url, value: value)
+  }
+
+  static func replacePreferences(at url: URL, value: MarkdownJSON) throws -> MarkdownJSON {
     guard validPreferences(value) else { throw MarkdownError.invalid }
     try jsonData(["version":1, "preferences":value]).write(to:url, options:.atomic)
     let file = try FileHandle(forWritingTo:url)
     try synchronizeAndClose({ try file.synchronize() }, close:{ try file.close() })
     return value
+  }
+
+  static func persistResolvedPreferences(at url: URL, previous: MarkdownJSON, resolved: MarkdownJSON) throws {
+    if !NSDictionary(dictionary: previous).isEqual(to: resolved) {
+      _ = try replacePreferences(at: url, value: resolved)
+    }
   }
 
   static func synchronizeAndClose(_ synchronize: () throws -> Void, close: () throws -> Void) throws {

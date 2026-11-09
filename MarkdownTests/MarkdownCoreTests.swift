@@ -3,6 +3,29 @@ import XCTest
 @testable import MarkdownNative
 
 final class MarkdownCoreTests: XCTestCase {
+  func testWorkspaceAppearancePreferencesSurviveLegacyModePatch() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let file = directory.appendingPathComponent("preferences.json")
+    let sources: MarkdownJSON = ["theme": String(repeating: "a", count: 64), "fontSize": "independent", "fonts": "independent"]
+    let independent: MarkdownJSON = ["theme": "light", "fontSize": 20]
+    let value: MarkdownJSON = ["mode": "ir", "theme": "system", "fontSize": 16, "sources": sources, "independent": independent]
+    _ = try MarkdownCore.replacePreferences(at: file, value: value)
+    let next = try MarkdownCore.preferences(at: file, patch: ["mode": "sv"])
+    XCTAssertEqual(next["mode"] as? String, "sv")
+    XCTAssertEqual((next["sources"] as? MarkdownJSON)?["theme"] as? String, sources["theme"] as? String)
+    XCTAssertEqual((next["independent"] as? MarkdownJSON)?["fontSize"] as? Int, 20)
+    var resolved = next
+    resolved["mode"] = "wysiwyg"
+    try MarkdownCore.persistResolvedPreferences(at: file, previous: next, resolved: resolved)
+    XCTAssertEqual(try MarkdownCore.preferences(at: file)["mode"] as? String, "wysiwyg")
+    XCTAssertThrowsError(try MarkdownCore.preferences(at: file, patch: ["sources": ["theme": "independent"]]))
+    XCTAssertFalse(MarkdownCore.validAppearanceSources(["theme": "../../outside"]))
+    XCTAssertFalse(MarkdownCore.validAppearanceSources(["unknown": "independent"]))
+    XCTAssertFalse(MarkdownCore.validIndependentAppearance(["fontSize": 1000]))
+  }
+
   func testFontPreferencesValidation() throws {
     let fonts: MarkdownJSON = ["global": [["family": "Example", "weight": 400]], "editor": [], "code": []]
     XCTAssertTrue(MarkdownCore.validFonts(fonts))
