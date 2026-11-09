@@ -3,6 +3,15 @@ import XCTest
 @testable import MarkdownNative
 
 final class MarkdownCoreTests: XCTestCase {
+  func testFontPreferencesValidation() throws {
+    let fonts: MarkdownJSON = ["global": [["family": "Example", "weight": 400]], "editor": [], "code": []]
+    XCTAssertTrue(MarkdownCore.validFonts(fonts))
+    XCTAssertFalse(MarkdownCore.validFonts(["global": [["family": "", "weight": 400]], "editor": [], "code": []]))
+    XCTAssertFalse(MarkdownCore.validFonts(["global": [["family": "Example", "weight": 1001]], "editor": [], "code": []]))
+    XCTAssertFalse(MarkdownCore.validFonts(["global": [], "editor": []]))
+    XCTAssertTrue(MarkdownCore.validPreferences(["mode": "ir", "theme": "system", "fontSize": 72, "fonts": fonts]))
+  }
+
   func testFirstPageSelectsOnlyItsTrustedStylesheet() {
     let html = "<link href=\"./appearance/themes/daylight/theme.css\"><script src=\"./index.js\"></script>"
     XCTAssertEqual(MarkdownCore.initialPage(html, dark: true), html.replacingOccurrences(of: "daylight/theme.css", with: "midnight/theme.css"))

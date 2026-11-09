@@ -37,11 +37,25 @@ enum MarkdownCore {
   static let recoveryCount = 1024
   static let scheme = "siyuan-markdown"
 
+  static func validFonts(_ value: Any?) -> Bool {
+    guard let value = value else { return true }
+    guard let groups = value as? MarkdownJSON, Set(groups.keys) == ["global", "editor", "code"] else { return false }
+    return groups.values.allSatisfy { group in
+      guard let fonts = group as? [MarkdownJSON], fonts.count <= 64 else { return false }
+      return fonts.allSatisfy { font in
+        guard Set(font.keys) == ["family", "weight"], let family = font["family"] as? String,
+          !family.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty(), family.count <= 256,
+          let weight = font["weight"] as? Int else { return false }
+        return (1...1000).contains(weight)
+      }
+    }
+  }
+
   static func validPreferences(_ value: MarkdownJSON) -> Bool {
-    Set(value.keys) == ["mode", "theme", "fontSize"] &&
+    Set(value.keys).isSubset(of: ["mode", "theme", "fontSize", "fonts"]) &&
       ["ir", "wysiwyg", "sv"].contains(value["mode"] as? String ?? "") &&
       ["system", "light", "dark"].contains(value["theme"] as? String ?? "") &&
-      [14, 16, 18, 20, 24, 28, 32].contains(value["fontSize"] as? Int ?? 0)
+      (9...72).contains(value["fontSize"] as? Int ?? 0) && validFonts(value["fonts"])
   }
 
   // 宿主在 MainActor 上同步读合并写；各窗口不以自己的旧快照覆盖其他窗口的偏好。
@@ -54,7 +68,7 @@ enum MarkdownCore {
       value = saved
     }
     guard let patch = patch else { return value }
-    guard Set(patch.keys).isSubset(of:["mode", "theme", "fontSize"]) else { throw MarkdownError.invalid }
+    guard Set(patch.keys).isSubset(of:["mode", "theme", "fontSize", "fonts"]) else { throw MarkdownError.invalid }
     value.merge(patch) { _, new in new }
     guard validPreferences(value) else { throw MarkdownError.invalid }
     try jsonData(["version":1, "preferences":value]).write(to:url, options:.atomic)

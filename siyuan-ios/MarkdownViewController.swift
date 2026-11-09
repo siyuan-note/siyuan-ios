@@ -1,4 +1,5 @@
 import UIKit
+import Iosk
 import UniformTypeIdentifiers
 import WebKit
 
@@ -249,10 +250,14 @@ import WebKit
       return result
     }
     switch action {
+    case "system-fonts":
+      let raw = await Task.detached(priority: .userInitiated) { Iosk.MobileGetSysFonts() ?? "[]" }.value
+      guard let data = raw.data(using: .utf8), let fonts = try JSONSerialization.jsonObject(with: data) as? [MarkdownJSON] else { throw MarkdownError.invalid }
+      return fonts
     case "bootstrap":
       if !treeInitialized { treeInitialized = true; await tree.follow(current?.url, authorizedDirectory:current?.scope); foreground() }
       var bootstrap: MarkdownJSON = ["sessionId": session.id, "content": session.initial, "format": session.format,
-        "preferences": preferences, "languages": languages, "lang": language, "platform": "ios", "dark": traitCollection.userInterfaceStyle == .dark]
+        "preferences": preferences, "capabilities": ["systemFonts": true], "languages": languages, "lang": language, "platform": "ios", "dark": traitCollection.userInterfaceStyle == .dark]
       if let current = current {
         var target = current.target
         target["baseline"] = session.restoredBaseline ?? current.baseline

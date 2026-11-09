@@ -43,7 +43,7 @@ test("native Markdown sources are part of the application target and do not star
     const sources = project.match(/\/\* Begin PBXSourcesBuildPhase section \*\/([\s\S]*?)\/\* End PBXSourcesBuildPhase section \*\//)[1];
     for (const name of ["MarkdownCore", "MarkdownTree", "MarkdownDocument", "MarkdownHost", "MarkdownSceneDelegate", "MarkdownViewController"]) {
         assert.ok(sources.includes(`${name}.swift in Sources`), `${name} must be compiled`);
-        assert.doesNotMatch(read(`siyuan-ios/${name}.swift`), /import Iosk|MobileStartKernel|loadFileURL\(/);
+        assert.doesNotMatch(read(`siyuan-ios/${name}.swift`), /MobileStartKernel|loadFileURL\(/);
     }
     const app = read("siyuan-ios/AppDelegate.swift");
     const configuration = app.slice(app.indexOf("configurationForConnecting"), app.indexOf("didDiscardSceneSessions"));
@@ -165,4 +165,13 @@ test("the initial bundled index and transparent scroll surface honor saved appea
     assert.match(container, /webView\?\.scrollView\.backgroundColor = background/);
     assert.match(container, /return theme == "dark" \|\| theme == "system" && traitCollection\.userInterfaceStyle == \.dark/);
     assert.match(container, /webView\.isOpaque = false/);
+});
+
+test("system font enumeration runs off the main actor without starting the kernel", () => {
+    assert.match(container, /case "system-fonts":[\s\S]*Task\.detached\(priority: \.userInitiated\)[\s\S]*MobileGetSysFonts/);
+    assert.match(container, /"capabilities": \["systemFonts": true\]/);
+    assert.doesNotMatch(container, /MobileStartKernel|MobileExit/);
+    const core = read("siyuan-ios/MarkdownCore.swift");
+    assert.match(core, /validFonts\(value\["fonts"\]\)/);
+    assert.match(core, /\(1\.\.\.1000\)\.contains\(weight\)/);
 });
