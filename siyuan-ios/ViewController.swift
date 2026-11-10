@@ -2057,9 +2057,13 @@ extension ViewController: WKUIDelegate {
       && frame.securityOrigin.protocol == origin.protocol && frame.securityOrigin.host == origin.host
       && frame.securityOrigin.port == origin.port
       && webView.url.map { isLocalKernelURL($0) } == true
-    decisionHandler(
-      trusted && type == .microphone && AVAudioSession.sharedInstance().recordPermission == .granted
-        ? .grant : .prompt)
+    let microphoneGranted: Bool
+    if #available(iOS 17.0, *) {
+      microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
+    } else {
+      microphoneGranted = AVAudioSession.sharedInstance().recordPermission == .granted
+    }
+    decisionHandler(trusted && type == .microphone && microphoneGranted ? .grant : .prompt)
   }
 
   @available(iOS 16.4, *)

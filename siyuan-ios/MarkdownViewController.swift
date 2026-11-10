@@ -110,10 +110,21 @@ import WebKit
     }
     NotificationCenter.default.addObserver(self, selector: #selector(background), name: UIApplication.didEnterBackgroundNotification, object: nil)
     NotificationCenter.default.addObserver(self, selector: #selector(foreground), name: UIApplication.didBecomeActiveNotification, object: nil)
+    if #available(iOS 17.0, *) {
+      registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (controller: MarkdownViewController, _: UITraitCollection) in
+        controller.updateTheme()
+      }
+    }
   }
 
+  @available(iOS, introduced: 8.0, deprecated: 17.0)
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
     super.traitCollectionDidChange(previousTraitCollection)
+    if #available(iOS 17.0, *) { return }
+    updateTheme()
+  }
+
+  private func updateTheme() {
     updateSurfaceColors()
     notify("theme", extra: ["dark": traitCollection.userInterfaceStyle == .dark])
   }
@@ -258,7 +269,7 @@ import WebKit
     }
     switch action {
     case "system-fonts":
-      let raw = await Task.detached(priority: .userInitiated) { Iosk.MobileGetSysFonts() ?? "[]" }.value
+      let raw = await Task.detached(priority: .userInitiated) { Iosk.MobileGetSysFonts() }.value
       guard let data = raw.data(using: .utf8), let fonts = try JSONSerialization.jsonObject(with: data) as? [MarkdownJSON] else { throw MarkdownError.invalid }
       return fonts
     case "bootstrap":
@@ -696,7 +707,9 @@ private actor MarkdownAppearanceStore {
         guard MarkdownCore.validPreferences(current) else { throw MarkdownError.invalid }
       }
       let preferences = String(decoding: try MarkdownCore.jsonData(current), as: UTF8.self)
-      let raw = try resolver.resolve(preferences, patch: patch ?? "")
+      var error: NSError?
+      let raw = resolver.resolve(preferences, patch: patch ?? "", error: &error)
+      if let error = error { throw error }
       guard let data = raw.data(using: .utf8),
         let result = try JSONSerialization.jsonObject(with: data) as? MarkdownJSON,
         let normalized = result["preferences"] as? MarkdownJSON else { throw MarkdownError.invalid }
@@ -710,8 +723,8 @@ private actor MarkdownAppearanceStore {
   }
 
   func readFont(_ id: String, token: String) throws -> Data {
-    guard let resolver = resolvers[id], let data = try resolver.readFont(token) else { throw MarkdownError.unavailable }
-    return data
+    guard let resolver = resolvers[id] else { throw MarkdownError.unavailable }
+    return try resolver.readFont(token)
   }
 
   func close(_ id: String) {

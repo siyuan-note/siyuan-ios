@@ -44,7 +44,7 @@ enum MarkdownCore {
       guard let fonts = group as? [MarkdownJSON], fonts.count <= 64 else { return false }
       return fonts.allSatisfy { font in
         guard Set(font.keys) == ["family", "weight"], let family = font["family"] as? String,
-          !family.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty(), family.count <= 256,
+          !family.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, family.count <= 256,
           let weight = font["weight"] as? Int else { return false }
         return (1...1000).contains(weight)
       }
