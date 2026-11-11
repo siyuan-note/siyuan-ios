@@ -734,6 +734,13 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       return
     }
 
+    // HTML 附件的子框架加载留在笔记中，主动打开和下载仍走原有流程。
+    // 内核继续为 iframe=true 的 HTML 响应设置 sandbox CSP。
+    if isLocalHTMLAssetIFrameNavigation(webView, navigationAction) {
+      decisionHandler(.allow)
+      return
+    }
+
     if (url.description.lowercased().starts(with: "http://127.0.0.1:6806/assets") == true
       || url.description.lowercased().starts(with: "http://127.0.0.1:6806/export") == true  // 导出 Data
       || (url.description.lowercased().starts(with: "http://127.0.0.1:6806") == false
@@ -1104,6 +1111,41 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
 
   private func isLocalKernelURL(_ url: URL) -> Bool {
     return url.scheme == "http" && url.host == "127.0.0.1" && url.port == 6806
+  }
+
+  private func isLocalHTMLAssetIFrameNavigation(
+    _ webView: WKWebView, _ navigationAction: WKNavigationAction
+  ) -> Bool {
+    guard webView === ViewController.syWebView, let mainURL = webView.url,
+      isLocalKernelURL(mainURL), mainURL.user == nil, mainURL.password == nil,
+      navigationAction.targetFrame?.isMainFrame == false,
+      navigationAction.navigationType == .other, !navigationAction.shouldPerformDownload,
+      let url = navigationAction.request.url
+    else { return false }
+    return isLocalHTMLAssetIFrameURL(url)
+  }
+
+  private func isLocalHTMLAssetIFrameURL(_ url: URL) -> Bool {
+    guard isLocalKernelURL(url), url.user == nil, url.password == nil,
+      let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      components.percentEncodedPath.hasPrefix("/assets/"),
+      let path = components.percentEncodedPath.removingPercentEncoding,
+      !path.contains("\\"), path.rangeOfCharacter(from: .controlCharacters) == nil,
+      let query = components.percentEncodedQuery, !query.contains(";"),
+      let items = components.queryItems
+    else { return false }
+
+    // 拒绝路径穿越和空路径段，不把前缀相似的 URL 当成本地附件。
+    let segments = path.split(separator: "/", omittingEmptySubsequences: false).dropFirst()
+    guard !segments.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }),
+      ["html", "htm"].contains((path as NSString).pathExtension.lowercased())
+    else { return false }
+
+    // 与内核的参数名大小写保持一致；拒绝重复参数和分号，避免解析差异。
+    let iframe = items.filter { $0.name == "iframe" }
+    let download = items.filter { $0.name == "download" }
+    return iframe.count == 1 && iframe[0].value?.lowercased() == "true"
+      && download.count <= 1 && download.first?.value?.lowercased() != "true"
   }
 
   // 保留资源路径编码和笔记本参数，供现有导出租约解析。
