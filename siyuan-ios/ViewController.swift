@@ -106,6 +106,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   private var bootProgressTask: URLSessionDataTask?
   private var bootProgressMonitorActive = false
   private var kernelBootCompleted = false
+  private static var kernelRecoveryInProgress = false
   private var mainPageNavigationStarted = false
   private var mainPageReady = false
   private var webViewRecoveryScheduled = false
@@ -569,8 +570,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     }
     switch ScriptMessageName(rawValue: message.name) {
     case .startKernelFast:
-      let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-      Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
+      recoverKernelIfNeeded()
     case .changeStatusBar:
       guard let value = message.body as? String else { return }
       let argument = value.split(separator: " ")
@@ -1421,21 +1421,46 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
     if kernelBootCompleted && !mainPageReady && startupFailureView == nil {
       scheduleMainPageWatchdog()
     }
-    // iOS 端息屏后内核退出，再次进入时重新拉起内核
-    let url = URL(string: "http://127.0.0.1:6806/api/system/version")!
-    let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
-      guard data != nil, error == nil else {
-        DispatchQueue.main.async {
-          ViewController.syWebView.evaluateJavaScript(
-            "var logElement = document.getElementById('errorLog');if(logElement){logElement.remove();}",
-            completionHandler: nil)
-        }
-        let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
+    recoverKernelIfNeeded()
+  }
+
+  private func recoverKernelIfNeeded() {
+    // 完整启动负责首次监听，前台恢复和手动重试在启动完成后才可重新监听。
+    guard kernelBootCompleted, !ViewController.kernelRecoveryInProgress else { return }
+    ViewController.kernelRecoveryInProgress = true
+    ViewController.probeKernel { reachable in
+      guard !reachable else {
+        ViewController.kernelRecoveryInProgress = false
         return
       }
+      ViewController.syWebView.evaluateJavaScript(
+        "var logElement = document.getElementById('errorLog');if(logElement){logElement.remove();}",
+        completionHandler: nil)
+      let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+      Iosk.MobileStartKernelFast("ios", Bundle.main.resourcePath, urls[0].path, "")
+      ViewController.waitForKernelRecovery(until: ProcessInfo.processInfo.systemUptime + 3)
     }
-    task.resume()
+  }
+
+  private static func probeKernel(_ completion: @escaping (Bool) -> Void) {
+    let url = URL(string: "http://127.0.0.1:6806/api/system/version")!
+    let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 1)
+    URLSession.shared.dataTask(with: request) { data, response, error in
+      let reachable = error == nil && data != nil && (response as? HTTPURLResponse)?.statusCode == 200
+      DispatchQueue.main.async { completion(reachable) }
+    }.resume()
+  }
+
+  private static func waitForKernelRecovery(until deadline: TimeInterval) {
+    probeKernel { reachable in
+      if reachable || ProcessInfo.processInfo.systemUptime >= deadline {
+        kernelRecoveryInProgress = false
+        return
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        waitForKernelRecovery(until: deadline)
+      }
+    }
   }
 
   @objc func protectedDataDidBecomeUnavailable(_ notification: NSNotification!) {
