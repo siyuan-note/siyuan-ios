@@ -23,6 +23,7 @@ import Iosk
 import PDFKit
 import Photos
 import PhotosUI
+import StoreKit
 import UIKit
 import UniformTypeIdentifiers
 import WebKit
@@ -109,6 +110,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   private static var kernelRecoveryInProgress = false
   private var mainPageNavigationStarted = false
   private var mainPageReady = false
+  private var storefrontTask: Task<Void, Never>?
+  private var storefrontRefreshTask: Task<Void, Never>?
   private var webViewRecoveryScheduled = false
   private var webViewRecoveryGeneration = 0
   private var forceDefaultBootAppearance = false
@@ -129,6 +132,8 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   deinit {
+    storefrontTask?.cancel()
+    storefrontRefreshTask?.cancel()
     // make sure to remove the observer when this view controller is dismissed/deallocated
     NotificationCenter.default.removeObserver(self)
     bootProgressMonitorActive = false
@@ -159,6 +164,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       red: 0x1e / 255.0, green: 0x1e / 255.0, blue: 0x1e / 255.0, alpha: 1)
     applyStatusBarAppearance(color: startupColor, isDark: true)
 
+    monitorAIStorefront()
     initKernel()
 
     ViewController.syWebView.customUserAgent =
@@ -800,6 +806,35 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
       UIDevice.current.systemVersion)
   }
 
+  private func monitorAIStorefront() {
+    _ = Iosk.MobileSetAIModelPolicy("unavailable")
+    refreshAIStorefront()
+    storefrontTask = Task { @MainActor [weak self] in
+      for await storefront in Storefront.updates {
+        guard !Task.isCancelled else { return }
+        self?.storefrontRefreshTask?.cancel()
+        self?.applyAIStorefront(storefront)
+      }
+    }
+  }
+
+  private func refreshAIStorefront() {
+    storefrontRefreshTask?.cancel()
+    storefrontRefreshTask = Task { @MainActor [weak self] in
+      let storefront = await Storefront.current
+      guard !Task.isCancelled else { return }
+      self?.applyAIStorefront(storefront)
+    }
+  }
+
+  private func applyAIStorefront(_ storefront: Storefront?) {
+    let code = storefront?.countryCode ?? ""
+    let policy = code.count != 3 ? "unavailable" : (code == "CHN" ? "deepseek" : "full")
+    if Iosk.MobileSetAIModelPolicy(policy), mainPageNavigationStarted {
+      ViewController.syWebView.reload()
+    }
+  }
+
   private func bootPageURL() -> URL? {
     let safeParameter = forceDefaultBootAppearance ? "&appearance=0" : ""
     return URL(
@@ -1418,6 +1453,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
   }
 
   @objc func willEnterForeground(_ notification: NSNotification!) {
+    refreshAIStorefront()
     if kernelBootCompleted && !mainPageReady && startupFailureView == nil {
       scheduleMainPageWatchdog()
     }
